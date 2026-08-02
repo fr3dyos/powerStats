@@ -2,7 +2,7 @@
 
 Real-time statistics manager for Ultimate Frisbee tournaments — brackets, round robins, live scoring, and player/team analytics.
 
-**Author:** Ana Naranjo — [fosorio.com](https://www.fosorio.com) — [@fr3dyos](https://github.com/fr3dyos)
+**Author:** Fredy Osorio — [fosorio.com](https://www.fosorio.com) — [@fr3dyos](https://github.com/fr3dyos)
 **License:** MIT
 
 ## Stack
