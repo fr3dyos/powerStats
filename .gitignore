@@ -30,3 +30,6 @@ yarn-error.log*
 
 # Testing
 /coverage
+
+# TODOS
+TODO.md
