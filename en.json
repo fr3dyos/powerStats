@@ -1,0 +1,45 @@
+{
+  "navigation": {
+    "tournaments": "Tournaments",
+    "teams": "Teams",
+    "players": "Players",
+    "rankings": "Rankings",
+    "liveGame": "Live Game",
+    "admin": "Admin",
+    "login": "Login",
+    "logout": "Logout"
+  },
+  "adminPanel": {
+    "createTournament": "Create Tournament",
+    "generateBracket": "Generate Bracket",
+    "generateRoundRobin": "Generate Round Robin",
+    "manageFields": "Manage Fields",
+    "fieldCount": "Field Count",
+    "scoringRule": "Scoring Rule",
+    "timeLimit": "Time Limit",
+    "scoreLimit": "Score Limit",
+    "uploadLogo": "Upload Logo"
+  },
+  "liveScoringConsole": {
+    "scorer": "Scorer",
+    "assistant": "Assistant",
+    "defender": "Defender",
+    "timeout": "Timeout",
+    "half1": "Half 1",
+    "half2": "Half 2",
+    "endGame": "End Game"
+  },
+  "publicStats": {
+    "goals": "Goals",
+    "assists": "Assists",
+    "defenses": "Defenses",
+    "mvp": "MVP",
+    "teamRanking": "Team Ranking",
+    "last5Games": "Last 5 Games",
+    "breakGoals": "Break Goals",
+    "goalAverage": "Goal Average",
+    "defenseAverage": "Defense Average",
+    "mensStats": "Men's Stats",
+    "womensStats": "Women's Stats"
+  }
+}

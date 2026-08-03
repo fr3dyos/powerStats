@@ -1,0 +1,45 @@
+{
+  "navigation": {
+    "tournaments": "Torneios",
+    "teams": "Equipes",
+    "players": "Jogadores",
+    "rankings": "Rankings",
+    "liveGame": "Jogo ao Vivo",
+    "admin": "Admin",
+    "login": "Login",
+    "logout": "Logout"
+  },
+  "adminPanel": {
+    "createTournament": "Criar Torneio",
+    "generateBracket": "Gerar Chave",
+    "generateRoundRobin": "Gerar Grupo",
+    "manageFields": "Gerenciar Campos",
+    "fieldCount": "Número de Campos",
+    "scoringRule": "Regra de Pontuação",
+    "timeLimit": "Limite de Tempo",
+    "scoreLimit": "Limite de Pontos",
+    "uploadLogo": "Fazer Upload do Logotipo"
+  },
+  "liveScoringConsole": {
+    "scorer": "Marcador",
+    "assistant": "Assistente",
+    "defender": "Defensor",
+    "timeout": "Tempo Morto",
+    "half1": "Tempo 1",
+    "half2": "Tempo 2",
+    "endGame": "Encerrar Jogo"
+  },
+  "publicStats": {
+    "goals": "Gols",
+    "assists": "Assistências",
+    "defenses": "Defesas",
+    "mvp": "MVP",
+    "teamRanking": "Ranking da Equipe",
+    "last5Games": "Últimos 5 Jogos",
+    "breakGoals": "Gols de Quebra",
+    "goalAverage": "Média de Gols",
+    "defenseAverage": "Média de Defesa",
+    "mensStats": "Estatísticas Masculinas",
+    "womensStats": "Estatísticas Femininas"
+  }
+}

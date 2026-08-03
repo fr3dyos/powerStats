@@ -1,0 +1,45 @@
+{
+  "navigation": {
+    "tournaments": "Torneos",
+    "teams": "Equipos",
+    "players": "Jugadores",
+    "rankings": "Clasificación",
+    "liveGame": "Juego en Vivo",
+    "admin": "Admin",
+    "login": "Iniciar Sesión",
+    "logout": "Cerrar Sesión"
+  },
+  "adminPanel": {
+    "createTournament": "Crear Torneo",
+    "generateBracket": "Generar Cuadro",
+    "generateRoundRobin": "Generar Ronda Robin",
+    "manageFields": "Gestionar Campos",
+    "fieldCount": "Número de Campos",
+    "scoringRule": "Regla de Puntuación",
+    "timeLimit": "Límite de Tiempo",
+    "scoreLimit": "Límite de Puntos",
+    "uploadLogo": "Subir Logotipo"
+  },
+  "liveScoringConsole": {
+    "scorer": "Anotador",
+    "assistant": "Asistente",
+    "defender": "Defensor",
+    "timeout": "Tiempo Fuera",
+    "half1": "Tiempo 1",
+    "half2": "Tiempo 2",
+    "endGame": "Finalizar Juego"
+  },
+  "publicStats": {
+    "goals": "Goles",
+    "assists": "Asistencias",
+    "defenses": "Defensas",
+    "mvp": "MVP",
+    "teamRanking": "Clasificación del Equipo",
+    "last5Games": "Últimos 5 Partidos",
+    "breakGoals": "Goles de Desempate",
+    "goalAverage": "Promedio de Goles",
+    "defenseAverage": "Promedio de Defensa",
+    "mensStats": "Estadísticas Masculinas",
+    "womensStats": "Estadísticas Femeninas"
+  }
+}
