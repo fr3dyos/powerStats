@@ -9,9 +9,15 @@ uvicorn[standard]==0.30.6
 sqlalchemy==2.0.35
 psycopg2-binary==2.9.9
 
+# --- Environment variables (load .env) ---
+python-dotenv==1.0.1
+
 # --- Validation ---
 pydantic==1.10.18
 pydantic[email]
+
+# --- File uploads (UploadFile / File(...) endpoints) ---
+python-multipart
 
 # --- Supabase client (Auth + Storage) ---
 supabase==2.5.3

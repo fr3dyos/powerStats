@@ -187,6 +187,7 @@ async def upload_team_logo(
     team_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    _: str = Depends(require_scorekeeper),
 ):
     """Upload a logo image for a team to Supabase Storage.
 

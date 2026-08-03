@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from routers.deps import get_db
-from routers.auth import get_current_user, require_public, require_scorekeeper, require_admin
+from routers.auth import require_public, require_scorekeeper, require_admin
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 
@@ -186,6 +186,26 @@ def delete_tournament(tournament_id: int, db: Session = Depends(get_db), _: str 
 # ---------------------------------------------------------------------------
 # Single-elimination bracket generation
 # ---------------------------------------------------------------------------
+def _standard_seed_order(size: int) -> List[int]:
+    """Return the standard 1-indexed seed order for a power-of-two bracket.
+
+    Using this order, seed 1 and seed 2 meet only in the final, and the
+    strongest seeds are spread across the bracket. Matches the classic
+    single-elimination seeding pattern.
+
+    :param size: The bracket size (a power of two).
+    :return: A list of seed numbers (1..size) in bracket slot order.
+    """
+    if size == 1:
+        return [1]
+    prev = _standard_seed_order(size // 2)
+    result = []
+    for seed in prev:
+        result.append(seed)
+        result.append(size + 1 - seed)
+    return result
+
+
 def _build_bracket(team_ids: List[int]) -> Dict:
     """Build a single-elimination bracket tree using the "bye seeding" method.
 
@@ -199,38 +219,22 @@ def _build_bracket(team_ids: List[int]) -> Dict:
     # Number of teams in the first round after adding byes = next power of 2.
     next_power = 1 << math.ceil(math.log2(n))
     byes = next_power - n
-    # Standard seeding pattern for single-elimination brackets.
-    seeds = list(range(1, n + 1)) + [None] * byes  # None = bye
 
-    order = [seeds[0]]
-    i = 1
-    while len(order) < len(seeds):
-        step = 1 << i
-        new_order = []
-        for pos in range(0, len(order), 1):
-            # Reorder into the classic bracket pair sequence.
-            pass
-        # Simple alternating expansion:
-        new_order = []
-        for idx, val in enumerate(order):
-            mirror = seeds[min(len(seeds) - 1, len(seeds) - 1 - idx)] if idx < len(seeds) else None
-            new_order.append(val)
-            new_order.append(mirror)
-        order = new_order[: len(seeds)]
-        i += 1
-        if i > len(seeds) + 1:
-            break
+    # Standard seeding pattern for single-elimination brackets.
+    order = _standard_seed_order(next_power)
 
     # Build first-round pairings; byes advance automatically.
     slots: List[Dict] = []
     for idx in range(0, len(order), 2):
-        left = order[idx]
-        right = order[idx + 1] if idx + 1 < len(order) else None
+        seed_a = order[idx]
+        seed_b = order[idx + 1] if idx + 1 < len(order) else None
+        team_a_id = team_ids[seed_a - 1] if seed_a is not None and seed_a <= n else None
+        team_b_id = team_ids[seed_b - 1] if seed_b is not None and seed_b <= n else None
         slot = {
             "matchup": idx // 2 + 1,
-            "team_a_id": None if left is None else (team_ids[left - 1] if left is not None else None),
-            "team_b_id": None if right is None else (team_ids[right - 1] if right is not None else None),
-            "is_bye": left is None or right is None,
+            "team_a_id": team_a_id,
+            "team_b_id": team_b_id,
+            "is_bye": team_a_id is None or team_b_id is None,
             "winner_advances_to": None,
         }
         slots.append(slot)
@@ -427,7 +431,7 @@ def suggest_schedule(
         None, description="First slot time (defaults to tournament start_date)."
     ),
     db: Session = Depends(get_db),
-    _: str = Depends(require_public),
+    _: str = Depends(require_scorekeeper),
 ):
     """Suggest a match schedule given the number of available fields.
 
@@ -488,4 +492,3 @@ def suggest_schedule(
         "total_slots": len(schedule),
         "schedule": schedule,
     }
-

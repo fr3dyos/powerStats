@@ -17,7 +17,7 @@ representative player from the team (the first player by id). ``points``
 holds the timeout number (1 or 2) and ``event_type`` is ``timeout``.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from routers.deps import get_db
-from routers.auth import get_current_user, require_public, require_scorekeeper, require_admin
+from routers.auth import require_public, require_scorekeeper, require_admin
 
 router = APIRouter(prefix="/games", tags=["games"])
 
@@ -237,12 +237,12 @@ def create_game(payload: schemas.GameCreate, db: Session = Depends(get_db), _: s
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A game cannot be scheduled between the same team.",
         )
-    if payload.game_rule == models.GameRuleEnum.TIME_LIMIT and not payload.time_limit:
+    if payload.game_rule == models.GameRuleEnum.TIME_LIMIT and payload.time_limit is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="time_limit is required when game_rule is TIME_LIMIT.",
         )
-    if payload.game_rule == models.GameRuleEnum.SCORE_LIMIT and not payload.score_limit:
+    if payload.game_rule == models.GameRuleEnum.SCORE_LIMIT and payload.score_limit is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="score_limit is required when game_rule is SCORE_LIMIT.",
@@ -632,7 +632,7 @@ def end_game(
 
     try:
         game.is_completed = True
-        game.end_time = datetime.utcnow()
+        game.end_time = datetime.now(timezone.utc)
         db.commit()
         db.refresh(game)
     except Exception as exc:
@@ -669,4 +669,3 @@ def list_game_events(game_id: int, db: Session = Depends(get_db), _: str = Depen
             detail=f"Could not list game events: {str(exc)}",
         ) from exc
     return events
-
