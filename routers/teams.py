@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from routers.deps import build_file_path, get_db, upload_to_supabase_storage
+from routers.auth import require_admin, require_public, require_scorekeeper
 
 router = APIRouter(prefix="/teams", tags=["teams"])
 
@@ -66,6 +67,7 @@ def list_teams(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
+    _: str = Depends(require_public),
 ):
     """List teams, optionally filtered by tournament.
 
@@ -89,7 +91,7 @@ def list_teams(
 
 
 @router.post("", response_model=schemas.Team, status_code=status.HTTP_201_CREATED)
-def create_team(payload: schemas.TeamCreate, db: Session = Depends(get_db)):
+def create_team(payload: schemas.TeamCreate, db: Session = Depends(get_db), _: str = Depends(require_scorekeeper)):
     """Create a new team.
 
     :param payload: Team data (name, tournament_id, optional logo_url).
@@ -116,7 +118,7 @@ def create_team(payload: schemas.TeamCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/{team_id}", response_model=schemas.TeamWithPlayers)
-def get_team(team_id: int, db: Session = Depends(get_db)):
+def get_team(team_id: int, db: Session = Depends(get_db), _: str = Depends(require_public)):
     """Fetch a single team including its players.
 
     :param team_id: Team primary key.
@@ -131,6 +133,7 @@ def update_team(
     team_id: int,
     payload: schemas.TeamUpdate,
     db: Session = Depends(get_db),
+    _: str = Depends(require_scorekeeper),
 ):
     """Update team fields (partial update).
 
@@ -158,7 +161,7 @@ def update_team(
 
 
 @router.delete("/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_team(team_id: int, db: Session = Depends(get_db)):
+def delete_team(team_id: int, db: Session = Depends(get_db), _: str = Depends(require_admin)):
     """Delete a team.
 
     :param team_id: Team primary key.

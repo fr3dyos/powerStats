@@ -37,6 +37,7 @@ powerstats/
 │   ├── teams.py        # CRUD + logo upload
 │   ├── players.py      # CRUD + photo upload + cross-tournament stats
 │   └── games.py        # Live scoring events, timeouts, halves, game end
+├── requirements.txt    # Python backend dependencies
 ├── app/                # Next.js frontend
 ├── utils/              # Supabase client utilities
 ├── en.json             # English i18n
@@ -56,6 +57,12 @@ pip install -r requirements.txt
 cp .env.example .env  # fill in real Supabase values
 uvicorn main:app --reload --port 8000
 ```
+
+### Backend Environment Variables
+The following variables must be set in the backend `.env` file:
+- `SUPABASE_URL`: The Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY`: The Supabase service role key (for backend operations)
+- `SUPABASE_ANON_KEY`: The Supabase anonymous key (for client-side auth)
 
 ### Frontend
 ```bash

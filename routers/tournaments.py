@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from routers.deps import get_db
+from routers.auth import get_current_user, require_public, require_scorekeeper, require_admin
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 
@@ -53,6 +54,7 @@ def list_tournaments(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
+    _: str = Depends(require_public),
 ):
     """List tournaments with pagination.
 
@@ -81,6 +83,7 @@ def list_tournaments(
 def create_tournament(
     payload: schemas.TournamentCreate,
     db: Session = Depends(get_db),
+    _: str = Depends(require_scorekeeper),
 ):
     """Create a new tournament.
 
@@ -114,7 +117,7 @@ def create_tournament(
 
 
 @router.get("/{tournament_id}", response_model=schemas.TournamentWithTeams)
-def get_tournament(tournament_id: int, db: Session = Depends(get_db)):
+def get_tournament(tournament_id: int, db: Session = Depends(get_db), _: str = Depends(require_public)):
     """Fetch a single tournament including its teams.
 
     :param tournament_id: Tournament primary key.
@@ -130,6 +133,7 @@ def update_tournament(
     tournament_id: int,
     payload: schemas.TournamentUpdate,
     db: Session = Depends(get_db),
+    _: str = Depends(require_scorekeeper),
 ):
     """Update tournament fields.
 
@@ -161,7 +165,7 @@ def update_tournament(
 
 
 @router.delete("/{tournament_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_tournament(tournament_id: int, db: Session = Depends(get_db)):
+def delete_tournament(tournament_id: int, db: Session = Depends(get_db), _: str = Depends(require_admin)):
     """Delete a tournament and cascade to its teams, games and stats.
 
     :param tournament_id: Tournament primary key.
@@ -247,6 +251,7 @@ def generate_bracket(
     tournament_id: int,
     persist: bool = Query(False, description="Persist first-round games as rows."),
     db: Session = Depends(get_db),
+    _: str = Depends(require_scorekeeper),
 ):
     """Generate a single-elimination bracket for a tournament.
 
@@ -354,6 +359,7 @@ def generate_round_robin(
     tournament_id: int,
     persist: bool = Query(False, description="Persist all fixtures as Game rows."),
     db: Session = Depends(get_db),
+    _: str = Depends(require_scorekeeper),
 ):
     """Generate a round-robin schedule for the tournament's teams.
 
@@ -421,6 +427,7 @@ def suggest_schedule(
         None, description="First slot time (defaults to tournament start_date)."
     ),
     db: Session = Depends(get_db),
+    _: str = Depends(require_public),
 ):
     """Suggest a match schedule given the number of available fields.
 

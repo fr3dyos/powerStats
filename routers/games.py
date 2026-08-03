@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from routers.deps import get_db
+from routers.auth import get_current_user, require_public, require_scorekeeper, require_admin
 
 router = APIRouter(prefix="/games", tags=["games"])
 
@@ -188,6 +189,7 @@ def list_games(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
+    _: str = Depends(require_public),
 ):
     """List games with optional filters.
 
@@ -214,7 +216,7 @@ def list_games(
 
 
 @router.post("", response_model=schemas.Game, status_code=status.HTTP_201_CREATED)
-def create_game(payload: schemas.GameCreate, db: Session = Depends(get_db)):
+def create_game(payload: schemas.GameCreate, db: Session = Depends(get_db), _: str = Depends(require_scorekeeper)):
     """Create a new game.
 
     :param payload: Game data (tournament, teams, rule, limits, scores).
@@ -260,7 +262,7 @@ def create_game(payload: schemas.GameCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/{game_id}", response_model=schemas.GameWithDetails)
-def get_game(game_id: int, db: Session = Depends(get_db)):
+def get_game(game_id: int, db: Session = Depends(get_db), _: str = Depends(require_public)):
     """Fetch a single game with team, tournament, and event details.
 
     :param game_id: Game primary key.
@@ -275,6 +277,7 @@ def update_game(
     game_id: int,
     payload: schemas.GameUpdate,
     db: Session = Depends(get_db),
+    _: str = Depends(require_scorekeeper),
 ):
     """Update game fields (partial update).
 
@@ -302,7 +305,7 @@ def update_game(
 
 
 @router.delete("/{game_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_game(game_id: int, db: Session = Depends(get_db)):
+def delete_game(game_id: int, db: Session = Depends(get_db), _: str = Depends(require_admin)):
     """Delete a game.
 
     :param game_id: Game primary key.
@@ -328,6 +331,7 @@ def record_event(
     game_id: int,
     payload: schemas.GameEventCreate,
     db: Session = Depends(get_db),
+    _: str = Depends(require_scorekeeper),
 ):
     """Record a scoring event (goal / assist / defense) for a live game.
 
@@ -379,9 +383,9 @@ def record_event(
         if payload.event_type == models.GameEventTypeEnum.GOAL:
             stats.goals += 1
             if player.team_id == game.home_team_id:
-                game.home_score += payload.points if payload.points else 1
+                game.home_score += payload.points
             else:
-                game.away_score += payload.points if payload.points else 1
+                game.away_score += payload.points
         elif payload.event_type == models.GameEventTypeEnum.ASSIST:
             stats.assists += 1
         elif payload.event_type == models.GameEventTypeEnum.DEFENSE:
@@ -409,6 +413,7 @@ def start_timeout(
     time_elapsed: Optional[int] = None,
     period: Optional[int] = None,
     db: Session = Depends(get_db),
+    _: str = Depends(require_scorekeeper),
 ):
     """Start a timeout for a team in the current half.
 
@@ -483,7 +488,7 @@ def start_timeout(
 
 
 @router.post("/{game_id}/end-timeout", response_model=schemas.GameEvent)
-def end_timeout(game_id: int, db: Session = Depends(get_db)):
+def end_timeout(game_id: int, db: Session = Depends(get_db), _: str = Depends(require_scorekeeper)):
     """End the most recent active timeout.
 
     Because the schema has no explicit timeout state, this records a
@@ -542,6 +547,7 @@ def advance_half(
     game_id: int,
     time_elapsed: Optional[int] = None,
     db: Session = Depends(get_db),
+    _: str = Depends(require_scorekeeper),
 ):
     """Advance the game to the next half.
 
@@ -594,6 +600,7 @@ def advance_half(
 def end_game(
     game_id: int,
     db: Session = Depends(get_db),
+    _: str = Depends(require_scorekeeper),
 ):
     """End the game, enforcing the configured rule.
 
@@ -641,7 +648,7 @@ def end_game(
 # Convenience: game events list
 # ---------------------------------------------------------------------------
 @router.get("/{game_id}/events", response_model=List[schemas.GameEvent])
-def list_game_events(game_id: int, db: Session = Depends(get_db)):
+def list_game_events(game_id: int, db: Session = Depends(get_db), _: str = Depends(require_public)):
     """List all events recorded for a game.
 
     :param game_id: Game primary key.

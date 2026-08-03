@@ -1,0 +1,24 @@
+# PowerStats — Python Backend Dependencies
+# Install: pip install -r requirements.txt
+
+# --- Web framework ---
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+
+# --- Database ---
+sqlalchemy==2.0.35
+psycopg2-binary==2.9.9
+
+# --- Validation ---
+pydantic==1.10.18
+pydantic[email]
+
+# --- Supabase client (Auth + Storage) ---
+supabase==2.5.3
+
+# --- CORS (for local frontend dev) ---
+# fastapi includes starlette which has CORSMiddleware built-in
+
+# --- ASGI server ---
+# uvicorn handles server duties (listed above)
+

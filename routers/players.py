@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from routers.deps import build_file_path, get_db, upload_to_supabase_storage
+from routers.auth import require_admin, require_public, require_scorekeeper
 
 router = APIRouter(prefix="/players", tags=["players"])
 
@@ -62,6 +63,7 @@ def list_players(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
+    _: str = Depends(require_public),
 ):
     """List players, optionally filtered by team.
 
@@ -90,7 +92,7 @@ def list_players(
 
 
 @router.post("", response_model=schemas.Player, status_code=status.HTTP_201_CREATED)
-def create_player(payload: schemas.PlayerCreate, db: Session = Depends(get_db)):
+def create_player(payload: schemas.PlayerCreate, db: Session = Depends(get_db), _: str = Depends(require_scorekeeper)):
     """Create a new player.
 
     :param payload: Player data (names, jersey_number, team_id).
@@ -118,7 +120,7 @@ def create_player(payload: schemas.PlayerCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/{player_id}", response_model=schemas.PlayerWithEvents)
-def get_player(player_id: int, db: Session = Depends(get_db)):
+def get_player(player_id: int, db: Session = Depends(get_db), _: str = Depends(require_public)):
     """Fetch a single player including their game events.
 
     :param player_id: Player primary key.
@@ -133,6 +135,7 @@ def update_player(
     player_id: int,
     payload: schemas.PlayerUpdate,
     db: Session = Depends(get_db),
+    _: str = Depends(require_scorekeeper),
 ):
     """Update player fields (partial update).
 
@@ -160,7 +163,7 @@ def update_player(
 
 
 @router.delete("/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_player(player_id: int, db: Session = Depends(get_db)):
+def delete_player(player_id: int, db: Session = Depends(get_db), _: str = Depends(require_admin)):
     """Delete a player.
 
     :param player_id: Player primary key.
@@ -186,6 +189,7 @@ async def upload_player_photo(
     player_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    _: str = Depends(require_scorekeeper),
 ):
     """Upload a photo for a player to Supabase Storage.
 
@@ -234,7 +238,7 @@ async def upload_player_photo(
 # Cross-tournament stats aggregation
 # ---------------------------------------------------------------------------
 @router.get("/{player_id}/stats", response_model=dict)
-def get_player_stats_all_tournaments(player_id: int, db: Session = Depends(get_db)):
+def get_player_stats_all_tournaments(player_id: int, db: Session = Depends(get_db), _: str = Depends(require_public)):
     """Return a player's stats aggregated across ALL tournaments.
 
     :param player_id: Player primary key.
