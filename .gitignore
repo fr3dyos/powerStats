@@ -21,6 +21,7 @@ build/
 
 # Supabase
 .supabase/
+.mcp.json
 
 # OS
 .DS_Store
@@ -45,3 +46,5 @@ power*.md
 SECURITY.md
 powerstats-pipeline.md
 DESIGN.md
+SECURITY.md
+FIX_PROMPT.md
