@@ -107,7 +107,7 @@ def _extract_role(user) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # Role-check dependency factory
 # ---------------------------------------------------------------------------
-def require_roles(*allowed_roles: str):
+def require_roles(*allowed_roles: str, allow_anonymous: bool = False):
     """Create a dependency enforcing that the current user has a role.
 
     Usage::
@@ -116,11 +116,19 @@ def require_roles(*allowed_roles: str):
         def admin_endpoint(_: str = Depends(require_roles("admin"))):
             return {"ok": True}
 
+    When ``allow_anonymous=True`` the dependency permits requests without a
+    bearer token (public browsing). If a token IS provided it is still
+    validated and the user's role is enforced; missing/invalid tokens are
+    treated as anonymous rather than rejected.
+
     :param allowed_roles: One or more role names permitted for the endpoint.
+    :param allow_anonymous: When True, anonymous requests are permitted.
     :return: A FastAPI dependency callable.
     """
     async def _role_checker(authorization: Optional[str] = Header(None)):
         if not authorization or not authorization.lower().startswith("bearer "):
+            if allow_anonymous:
+                return None
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Missing bearer token. Include 'Authorization: Bearer <token>'.",
@@ -132,6 +140,10 @@ def require_roles(*allowed_roles: str):
             admin_client = get_supabase_admin_client()
             user = admin_client.auth.get_user(token).user
         except Exception as exc:
+            if allow_anonymous:
+                # A malformed or expired token on a public endpoint falls
+                # back to anonymous access rather than failing the request.
+                return None
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"Invalid or expired token: {str(exc)}",
@@ -155,7 +167,9 @@ def require_roles(*allowed_roles: str):
 # Alias dependencies for convenience across routers.
 require_admin = require_roles("admin")
 require_scorekeeper = require_roles("admin", "scorekeeper")
-require_public = require_roles("admin", "scorekeeper", "public")
+# Public endpoints allow anonymous browsing (no token required). If a token
+# is present it is still validated and restricted to the allowed roles.
+require_public = require_roles("admin", "scorekeeper", "public", allow_anonymous=True)
 
 
 def get_current_user(

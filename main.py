@@ -70,6 +70,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(tournaments.router)
+app.include_router(tournaments.phases_router)
 app.include_router(teams.router)
 app.include_router(players.router)
 app.include_router(games.router)

@@ -12,19 +12,17 @@ export default async function HomePage({
 }: {
   searchParams?: Promise<SearchParams> | SearchParams;
 }) {
-  // Server Component — resolve locale + dictionary in one place.
-  // i18n is not cookie/header-aware yet, so we default to English and let
-  // future enhancements (next-intl, Accept-Language) drive locale selection.
   const dict = getDictionary(pickLocale(undefined));
-
   const params = (await Promise.resolve(searchParams)) ?? {};
   const errorParam = Array.isArray(params.error) ? params.error[0] : params.error;
   const unauthorized = errorParam === "unauthorized";
 
   return (
     <AppShell
-      brandSubtitle={dict.adminDashboard.subtitle ?? "Ultimate Frisbee tournament manager"}
+      brandSubtitle="Ultimate Frisbee tournament manager"
       authLinks={[
+        { label: "Browse tournaments", href: "/tournaments", variant: "ghost" },
+        { label: "Rankings", href: "/rankings", variant: "ghost" },
         { label: dict.auth.enterAsAdmin, href: "/admin/login", variant: "primary" },
       ]}
     >
@@ -34,8 +32,12 @@ export default async function HomePage({
             <span className="dot" aria-hidden="true" />
             Welcome to PowerStats
           </span>
-          <h1>{dict.adminDashboard.welcome}</h1>
-          <p className="lead">{dict.adminDashboard.subtitle}</p>
+          <h1>Run the tournament.<br />Score every point.</h1>
+          <p className="lead">
+            PowerStats is the live scoring, bracket, and stats console for
+            Ultimate Frisbee tournaments. Built for directors who need
+            accurate data when the disc is in the air.
+          </p>
 
           {unauthorized ? (
             <div
@@ -49,24 +51,27 @@ export default async function HomePage({
           ) : null}
 
           <div className="ps-hero__cta">
-            <Link className="ps-btn ps-btn--primary" href="/admin/login">
-              {dict.auth.enterAsAdmin}
+            <Link className="ps-btn ps-btn--primary" href="/tournaments">
+              Browse tournaments
             </Link>
-            <Link className="ps-btn" href="#features">
-              Learn about PowerStats
+            <Link className="ps-btn" href="/rankings">
+              View rankings
+            </Link>
+            <Link className="ps-btn ps-btn--ghost" href="/admin/login">
+              {dict.auth.enterAsAdmin}
             </Link>
           </div>
 
           <p
             style={{
-              marginTop: 24,
+              marginTop: 32,
               color: "var(--ps-text-muted)",
               fontSize: 13,
             }}
           >
-            Are you an organizer?{" "}
-            <Link href="/admin/login">{dict.auth.enterAsAdmin}</Link> to create
-            and manage your event.
+            Tournament director?{" "}
+            <Link href="/admin/login">{dict.auth.enterAsAdmin}</Link> to manage
+            events.
           </p>
         </div>
       </section>
@@ -76,48 +81,67 @@ export default async function HomePage({
         className="ps-admin"
         style={{ paddingTop: 0, paddingBottom: 80 }}
       >
-        <h2
-          style={{
-            textAlign: "center",
-            marginBottom: 24,
-            color: "var(--ps-text)",
-          }}
-        >
-          Everything you need to run the tournament.
-        </h2>
+        <div className="ps-section" style={{ alignItems: "center", textAlign: "center" }}>
+          <span className="ps-section__eyebrow">Everything you need</span>
+          <h2>From pull to playoff</h2>
+          <p>
+            One console for live scoring, brackets, round-robin scheduling,
+            and player analytics. Wire it to a single field or a 64-team
+            championship.
+          </p>
+        </div>
+
         <div className="ps-grid">
-          <article className="ps-card">
+          <article className="ps-card ps-card--linked">
             <span className="ps-card__icon" aria-hidden="true">
               01
             </span>
             <h3>Live scoring</h3>
             <p>
-              Real-time updates for goals, assists, turns, and blocks directly
-              from the field.
+              Real-time updates for goals, assists, defenses, timeouts, and
+              halves — directly from the field.
             </p>
-            <span className="ps-card__footer">{dict.adminDashboard.liveScoring}</span>
+            <Link
+              href="/tournaments"
+              className="ps-card__footer"
+              style={{ color: "var(--ps-primary-container)" }}
+            >
+              Browse tournaments →
+            </Link>
           </article>
-          <article className="ps-card">
+          <article className="ps-card ps-card--linked">
             <span className="ps-card__icon" aria-hidden="true">
               02
             </span>
             <h3>Tournament formats</h3>
             <p>
-              Flexible support for round-robin pools, complex bracket
-              progression, and Swiss systems.
+              Flexible support for round-robin pools, single-elimination
+              brackets, and multi-phase playoffs.
             </p>
-            <span className="ps-card__footer">{dict.adminDashboard.tournaments}</span>
+            <Link
+              href="/tournaments"
+              className="ps-card__footer"
+              style={{ color: "var(--ps-primary-container)" }}
+            >
+              See fixtures →
+            </Link>
           </article>
-          <article className="ps-card">
+          <article className="ps-card ps-card--linked">
             <span className="ps-card__icon" aria-hidden="true">
               03
             </span>
             <h3>Performance insights</h3>
             <p>
-              Deep dive into team trends, statistical leaders, and historical
-              performance data.
+              Deep dive into team trends, statistical leaders, and
+              cross-tournament player history.
             </p>
-            <span className="ps-card__footer">{dict.adminDashboard.players}</span>
+            <Link
+              href="/rankings"
+              className="ps-card__footer"
+              style={{ color: "var(--ps-primary-container)" }}
+            >
+              View rankings →
+            </Link>
           </article>
         </div>
       </section>

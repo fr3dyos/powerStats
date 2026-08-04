@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum as PyEnum
 
@@ -15,6 +15,24 @@ class GameEventTypeEnum(str, PyEnum):
     TIMEOUT = "timeout"
     HALF = "half"
     SUBSTITUTION = "substitution"
+
+class PhaseTypeEnum(str, PyEnum):
+    ROUND_ROBIN = "round_robin"
+    BRACKET = "bracket"
+
+class PhaseStatusEnum(str, PyEnum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+class TiebreakerEnum(str, PyEnum):
+    POINTS = "points"
+    WINS = "wins"
+    GOAL_DIFFERENCE = "goal_difference"
+    GOALS_FOR = "goals_for"
+    GOALS_AGAINST = "goals_against"
+    DIRECT_MATCHUP = "direct_matchup"
+    SPIRIT_SCORE = "spirit_score"
 
 # Tournament schemas
 class TournamentBase(BaseModel):
@@ -50,6 +68,116 @@ class TournamentWithTeams(TournamentInDBBase):
 
 class TournamentWithGames(TournamentInDBBase):
     games: List["Game"] = []
+
+class TournamentWithPhases(TournamentInDBBase):
+    phases: List["Phase"] = []
+
+# Phase schemas
+class PhaseBase(BaseModel):
+    name: str = Field(..., max_length=255)
+    phase_order: int = Field(1, ge=1)
+    phase_type: PhaseTypeEnum
+    status: PhaseStatusEnum = PhaseStatusEnum.PENDING
+    status_mode: str = Field("auto", regex="^(auto|manual)$")
+    config: Dict[str, Any] = {}
+
+class PhaseCreate(PhaseBase):
+    pass
+
+class PhaseUpdate(BaseModel):
+    name: Optional[str] = Field(None, max_length=255)
+    phase_order: Optional[int] = Field(None, ge=1)
+    status: Optional[PhaseStatusEnum] = None
+    status_mode: Optional[str] = Field(None, regex="^(auto|manual)$")
+    config: Optional[Dict[str, Any]] = None
+
+class PhaseInDBBase(PhaseBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        orm_mode = True
+
+class Phase(PhaseInDBBase):
+    pass
+
+class PhaseWithGroups(PhaseInDBBase):
+    groups: List["Group"] = []
+
+class PhaseWithGames(PhaseInDBBase):
+    games: List["Game"] = []
+
+# Group schemas
+class GroupBase(BaseModel):
+    phase_id: int
+    name: str = Field(..., max_length=255)
+    group_order: int = Field(1, ge=1)
+
+class GroupCreate(GroupBase):
+    team_ids: List[int] = []
+
+class GroupUpdate(BaseModel):
+    name: Optional[str] = Field(None, max_length=255)
+    group_order: Optional[int] = Field(None, ge=1)
+
+class GroupInDBBase(GroupBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        orm_mode = True
+
+class Group(GroupInDBBase):
+    pass
+
+class GroupWithTeams(GroupInDBBase):
+    team_links: List["GroupTeam"] = []
+
+# GroupTeam schemas
+class GroupTeamBase(BaseModel):
+    group_id: int
+    team_id: int
+    seed: int = Field(0, ge=0)
+
+class GroupTeamInDBBase(GroupTeamBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class GroupTeam(GroupTeamInDBBase):
+    team: Optional["Team"] = None
+
+# Standings / ranking schemas
+class StandingsRow(BaseModel):
+    position: int
+    team_id: int
+    team_name: Optional[str] = None
+    group_id: Optional[int] = None
+    group_name: Optional[str] = None
+    played: int = 0
+    wins: int = 0
+    draws: int = 0
+    losses: int = 0
+    points: int = 0
+    goals_for: int = 0
+    goals_against: int = 0
+    goal_difference: int = 0
+    spirit_total: float = 0.0
+    spirit_games: int = 0
+    spirit_average: float = 0.0
+    direct_matchup: Optional[Dict[str, Any]] = None
+
+class StandingsTable(BaseModel):
+    phase_id: int
+    phase_name: str = ""
+    phase_type: str = ""
+    groups: List[Dict[str, Any]] = []
+    tiebreakers: List[str] = []
+    generated_at: datetime
 
 # Team schemas
 class TeamBase(BaseModel):
@@ -130,6 +258,18 @@ class GameBase(BaseModel):
     score_limit: Optional[int] = Field(None, ge=0)  # points to win
     field_number: Optional[int] = None
     is_completed: bool = False
+    # Phase / group attribution
+    phase_id: Optional[int] = None
+    group_id: Optional[int] = None
+    round_number: Optional[int] = Field(None, ge=1)
+    # Bracket attribution
+    bracket_round: Optional[int] = Field(None, ge=1)
+    bracket_slot: Optional[int] = Field(None, ge=1)
+    is_placement: bool = False
+    placement_position: Optional[int] = Field(None, ge=1)
+    # Spirit scores (0.0 - 10.0)
+    spirit_home: Optional[float] = Field(None, ge=0.0, le=10.0)
+    spirit_away: Optional[float] = Field(None, ge=0.0, le=10.0)
 
 class GameCreate(GameBase):
     pass
@@ -147,6 +287,15 @@ class GameUpdate(BaseModel):
     score_limit: Optional[int] = Field(None, ge=0)
     field_number: Optional[int] = None
     is_completed: Optional[bool] = None
+    phase_id: Optional[int] = None
+    group_id: Optional[int] = None
+    round_number: Optional[int] = Field(None, ge=1)
+    bracket_round: Optional[int] = Field(None, ge=1)
+    bracket_slot: Optional[int] = Field(None, ge=1)
+    is_placement: Optional[bool] = None
+    placement_position: Optional[int] = Field(None, ge=1)
+    spirit_home: Optional[float] = Field(None, ge=0.0, le=10.0)
+    spirit_away: Optional[float] = Field(None, ge=0.0, le=10.0)
 
 class GameInDBBase(GameBase):
     id: int
@@ -235,9 +384,13 @@ class PlayerTournamentStats(PlayerTournamentStatsInDBBase):
 # Update forward references for nested models
 TournamentWithTeams.update_forward_refs()
 TournamentWithGames.update_forward_refs()
+TournamentWithPhases.update_forward_refs()
 TeamWithPlayers.update_forward_refs()
 TeamWithGames.update_forward_refs()
 PlayerWithEvents.update_forward_refs()
 PlayerWithTournamentStats.update_forward_refs()
 GameWithDetails.update_forward_refs()
 GameEventWithDetails.update_forward_refs()
+PhaseWithGroups.update_forward_refs()
+PhaseWithGames.update_forward_refs()
+GroupWithTeams.update_forward_refs()

@@ -79,6 +79,8 @@
     "title": "Admin dashboard",
     "welcome": "Welcome to the PowerStats admin portal.",
     "subtitle": "Tournament management tools will appear here. Your session is secure and verified.",
+    "scorekeeperAccess": "Scorekeeper access verified.",
+    "scorekeeperSubtitle": "Run live scoring and review the tournament. Full editing is reserved for admins.",
     "ready": "Admin access verified.",
     "signedInAs": "Signed in as",
     "tournaments": "Tournaments",
@@ -86,6 +88,16 @@
     "players": "Players",
     "liveScoring": "Live scoring",
     "schedules": "Schedules",
-    "comingSoon": "Coming soon"
+    "comingSoon": "Coming soon",
+    "tournamentsCopy": "Create, edit, and manage your Ultimate Frisbee tournaments.",
+    "tournamentsFooter": "Browse tournaments →",
+    "teamsCopy": "Register teams, upload logos, and assign pools.",
+    "teamsFooter": "Open teams hub →",
+    "playersCopy": "Roster management with cross-tournament history.",
+    "playersFooter": "Browse player directory →",
+    "liveScoringCopy": "Run the live scoring console for goals, assists, and turns.",
+    "liveScoringFooter": "Open latest game →",
+    "schedulesCopy": "Bracket, round-robin, and Swiss schedule generation.",
+    "schedulesFooter": "Open bracket →"
   }
 }

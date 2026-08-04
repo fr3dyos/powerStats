@@ -79,6 +79,8 @@
     "title": "Painel administrativo",
     "welcome": "Bem-vindo ao portal administrativo do PowerStats.",
     "subtitle": "Aqui aparecerão as ferramentas de gestão de torneios. Sua sessão é segura e verificada.",
+    "scorekeeperAccess": "Acesso de anotador verificado.",
+    "scorekeeperSubtitle": "Anote ao vivo e revise o torneio. A edição completa é reservada aos administradores.",
     "ready": "Acesso administrativo verificado.",
     "signedInAs": "Conectado como",
     "tournaments": "Torneios",
@@ -86,6 +88,16 @@
     "players": "Jogadores",
     "liveScoring": "Pontuação ao vivo",
     "schedules": "Horários",
-    "comingSoon": "Em breve"
+    "comingSoon": "Em breve",
+    "tournamentsCopy": "Crie, edite e gerencie seus torneios de Ultimate Frisbee.",
+    "tournamentsFooter": "Ver torneios →",
+    "teamsCopy": "Cadastre equipes, envie logos e defina grupos.",
+    "teamsFooter": "Abrir equipes →",
+    "playersCopy": "Gestão de elencos com histórico entre torneios.",
+    "playersFooter": "Ver diretório de jogadores →",
+    "liveScoringCopy": "Console de pontuação ao vivo para gols, assistências e trocas.",
+    "liveScoringFooter": "Abrir último jogo →",
+    "schedulesCopy": "Geração de chaves, round-robin e suíço.",
+    "schedulesFooter": "Abrir chaves →"
   }
 }

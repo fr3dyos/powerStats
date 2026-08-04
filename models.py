@@ -1,4 +1,7 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Float, Text, Enum
+from sqlalchemy import (
+    Column, Integer, String, DateTime, ForeignKey, Boolean, Float, Text, Enum,
+    JSON,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -17,6 +20,25 @@ class GameEventTypeEnum(str, enum.Enum):
     HALF = "half"
     SUBSTITUTION = "substitution"
 
+# Enums for tournament phases / standings
+class PhaseTypeEnum(str, enum.Enum):
+    ROUND_ROBIN = "round_robin"
+    BRACKET = "bracket"
+
+class PhaseStatusEnum(str, enum.Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+class TiebreakerEnum(str, enum.Enum):
+    POINTS = "points"
+    WINS = "wins"
+    GOAL_DIFFERENCE = "goal_difference"
+    GOALS_FOR = "goals_for"
+    GOALS_AGAINST = "goals_against"
+    DIRECT_MATCHUP = "direct_matchup"
+    SPIRIT_SCORE = "spirit_score"
+
 # Tournament model
 class Tournament(Base):
     __tablename__ = "tournaments"
@@ -34,6 +56,80 @@ class Tournament(Base):
     teams = relationship("Team", back_populates="tournament")
     games = relationship("Game", back_populates="tournament")
     player_stats = relationship("PlayerTournamentStats", back_populates="tournament")
+    phases = relationship(
+        "Phase",
+        back_populates="tournament",
+        cascade="all, delete-orphan",
+        order_by="Phase.phase_order",
+    )
+
+# Phase model
+class Phase(Base):
+    __tablename__ = "phases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tournament_id = Column(Integer, ForeignKey("tournaments.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    phase_order = Column(Integer, nullable=False, default=1)
+    phase_type = Column(Enum(PhaseTypeEnum), nullable=False)
+    status = Column(Enum(PhaseStatusEnum), nullable=False, default=PhaseStatusEnum.PENDING)
+    # status_mode: 'auto' derives from completed games; 'manual' tracks a
+    # explicit admin-set status.
+    status_mode = Column(String(16), nullable=False, default="auto")
+    # Config JSON stores, for example:
+    #   {
+    #     "points_win": 3, "points_draw": 1, "points_loss": 0,
+    #     "group_count": 2, "advancing_teams": 2,
+    #     "tiebreakers": ["points", "goal_difference", "goals_for",
+    #                     "goals_against", "direct_matchup", "spirit_score"],
+    #     "include_placement_matches": true
+    #   }
+    config = Column(JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    tournament = relationship("Tournament", back_populates="phases")
+    groups = relationship(
+        "Group",
+        back_populates="phase",
+        cascade="all, delete-orphan",
+        order_by="Group.group_order",
+    )
+    games = relationship("Game", back_populates="phase")
+
+# Group model
+class Group(Base):
+    __tablename__ = "groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    phase_id = Column(Integer, ForeignKey("phases.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    group_order = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    phase = relationship("Phase", back_populates="groups")
+    team_links = relationship(
+        "GroupTeam",
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+
+# GroupTeam join model
+class GroupTeam(Base):
+    __tablename__ = "group_teams"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    seed = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    group = relationship("Group", back_populates="team_links")
+    team = relationship("Team")
 
 # Team model
 class Team(Base):
@@ -86,11 +182,26 @@ class Game(Base):
     score_limit = Column(Integer)  # points to win
     field_number = Column(Integer)
     is_completed = Column(Boolean, default=False)
+    # Phase / group attribution (optional — games may also be created without
+    # a phase for ad-hoc / friendly games).
+    phase_id = Column(Integer, ForeignKey("phases.id"), nullable=True)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
+    round_number = Column(Integer, nullable=True)  # round-robin round (1-based)
+    # Bracket attribution.
+    bracket_round = Column(Integer, nullable=True)  # 1=first round, 2=quarter, ...
+    bracket_slot = Column(Integer, nullable=True)   # slot index within the round
+    is_placement = Column(Boolean, default=False)   # True for 3rd/5th/7th place matches
+    placement_position = Column(Integer, nullable=True)  # 1=final, 2=2nd, 3=3rd, ...
+    # Spirit scores (0-10 per team per game, averaged later by the standings
+    # engine; recorded by the admin after each game).
+    spirit_home = Column(Float, nullable=True)
+    spirit_away = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
     tournament = relationship("Tournament", back_populates="games")
+    phase = relationship("Phase", back_populates="games")
     home_team = relationship("Team", foreign_keys=[home_team_id], back_populates="home_games")
     away_team = relationship("Team", foreign_keys=[away_team_id], back_populates="away_games")
     game_events = relationship("GameEvent", back_populates="game")

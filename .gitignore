@@ -40,4 +40,8 @@ npm-debug.log*
 # Others
 TODO.md
 RUN.md
-powerstats*.md
+power*.md
+*.xlsx
+SECURITY.md
+powerstats-pipeline.md
+
