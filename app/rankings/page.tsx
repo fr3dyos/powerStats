@@ -13,10 +13,16 @@ import {
   type Team,
   type Tournament,
 } from "@/utils/api";
+import { getServerLocale } from "@/utils/i18n-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function RankingsPage() {
+  const { dict } = await getServerLocale();
+  const common = dict.common;
+  const rk = dict.rankings;
+  const nav = dict.navigation;
+
   const tournaments = await tournamentsApi.list(50).catch(() => []);
 
   // For every tournament, compute its standings. We do this in parallel
@@ -99,7 +105,7 @@ export default async function RankingsPage() {
   const goalRanking = [...playerGoalTotals.values()]
     .sort((a, b) => b.goals - a.goals)
     .slice(0, 10);
-  const assistRanking = [...playerGoalTotals.values()]
+const assistRanking = [...playerGoalTotals.values()]
     .sort((a, b) => b.assists - a.assists)
     .slice(0, 10);
   const defenseRanking = [...playerGoalTotals.values()]
@@ -109,20 +115,17 @@ export default async function RankingsPage() {
   return (
     <AppShell
       brandSubtitle="League-wide rankings & performance"
+      footerText={common.footer}
       authLinks={[
-        { label: "Tournaments", href: "/tournaments", variant: "ghost" },
-        { label: "Admin", href: "/admin/login", variant: "ghost" },
+        { label: nav.tournaments, href: "/tournaments", variant: "ghost" },
+        { label: nav.admin, href: "/admin/login", variant: "ghost" },
       ]}
     >
       <section className="ps-admin">
         <div className="ps-section">
-          <span className="ps-section__eyebrow">Rankings</span>
-          <h1>League &amp; performance directory</h1>
-          <p>
-            Aggregated across every tournament. Top teams by wins, top
-            players by goals / assists / defenses. Drill into a specific
-            tournament for the per-event breakdown.
-          </p>
+          <span className="ps-section__eyebrow">{rk.eyebrow}</span>
+          <h1>{rk.title}</h1>
+          <p>{rk.subtitle}</p>
         </div>
 
         <div className="ps-split ps-split--1-2">
@@ -136,8 +139,8 @@ export default async function RankingsPage() {
                 justifyContent: "space-between",
               }}
             >
-              <h2 style={{ fontSize: 18 }}>Top teams</h2>
-              <span className="ps-pill">{teamRanking.length} teams</span>
+              <h2 style={{ fontSize: 18 }}>{rk.topTeams}</h2>
+              <span className="ps-pill">{teamRanking.length} {common.teams}</span>
             </header>
             {teamRanking.length === 0 ? (
               <p
@@ -147,7 +150,7 @@ export default async function RankingsPage() {
                   fontSize: 13,
                 }}
               >
-                No team data yet.
+                {common.noData}
               </p>
             ) : (
               <table className="ps-table">
@@ -238,8 +241,9 @@ export default async function RankingsPage() {
               gap: 16,
             }}
           >
-            <Leaderboard
-              title="Top scorers"
+<Leaderboard
+              title={rk.topScorers}
+              noData={common.noData}
               rows={goalRanking.map((r) => ({
                 href: `/players/${r.player.id}`,
                 rank: iFromId(playerGoalTotals, r.player.id, "goals"),
@@ -250,8 +254,9 @@ export default async function RankingsPage() {
                 value: r.goals,
               }))}
             />
-            <Leaderboard
-              title="Top assists"
+<Leaderboard
+              title={rk.topAssists}
+              noData={common.noData}
               rows={assistRanking.map((r) => ({
                 href: `/players/${r.player.id}`,
                 rank: iFromId(playerGoalTotals, r.player.id, "assists"),
@@ -262,8 +267,9 @@ export default async function RankingsPage() {
                 value: r.assists,
               }))}
             />
-            <Leaderboard
-              title="Top defenses"
+<Leaderboard
+              title={rk.topDefenses}
+              noData={common.noData}
               rows={defenseRanking.map((r) => ({
                 href: `/players/${r.player.id}`,
                 rank: iFromId(playerGoalTotals, r.player.id, "defenses"),
@@ -277,10 +283,10 @@ export default async function RankingsPage() {
           </div>
         </div>
 
-        <div style={{ marginTop: 32 }}>
+<div style={{ marginTop: 32 }}>
           <div className="ps-section">
-            <h2>All tournaments</h2>
-            <p>Per-tournament standings.</p>
+            <h2>{rk.allTournaments}</h2>
+            <p>{rk.perTournamentStandings}</p>
           </div>
           <div
             className="ps-card-list"
@@ -303,10 +309,10 @@ export default async function RankingsPage() {
                   <h3 style={{ fontSize: 16 }}>{tournament.name}</h3>
                   <Link
                     href={`/tournaments/${tournament.id}`}
-                    className="ps-pill"
+className="ps-pill"
                     style={{ textDecoration: "none" }}
                   >
-                    Open →
+                    {common.open} →
                   </Link>
                 </header>
                 <ol
@@ -391,6 +397,7 @@ function iFromId(
 function Leaderboard({
   title,
   rows,
+  noData = "No data yet.",
 }: {
   title: string;
   rows: Array<{
@@ -402,6 +409,7 @@ function Leaderboard({
     meta: string;
     value: number;
   }>;
+  noData?: string;
 }) {
   return (
     <div className="ps-card">
@@ -409,7 +417,7 @@ function Leaderboard({
         <h3 className="ps-leaderboard__title">{title}</h3>
         {rows.length === 0 ? (
           <p style={{ color: "var(--ps-text-muted)", fontSize: 13, margin: 0 }}>
-            No data yet.
+            {noData}
           </p>
         ) : (
           rows.map((row) => (

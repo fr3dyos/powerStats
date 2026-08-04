@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { AppShell } from "@/app/_components/AppShell";
-import { getDictionary, pickLocale } from "@/utils/i18n";
+import { getServerLocale } from "@/utils/i18n-server";
 
 type SearchParams = {
   error?: string | string[];
@@ -12,17 +12,21 @@ export default async function HomePage({
 }: {
   searchParams?: Promise<SearchParams> | SearchParams;
 }) {
-  const dict = getDictionary(pickLocale(undefined));
+  const { dict } = await getServerLocale();
   const params = (await Promise.resolve(searchParams)) ?? {};
   const errorParam = Array.isArray(params.error) ? params.error[0] : params.error;
   const unauthorized = errorParam === "unauthorized";
 
+  const home = dict.home;
+  const nav = dict.navigation;
+
   return (
     <AppShell
       brandSubtitle="Ultimate Frisbee tournament manager"
+      footerText={dict.common.footer}
       authLinks={[
-        { label: "Browse tournaments", href: "/tournaments", variant: "ghost" },
-        { label: "Rankings", href: "/rankings", variant: "ghost" },
+        { label: nav.tournaments, href: "/tournaments", variant: "ghost" },
+        { label: nav.rankings, href: "/rankings", variant: "ghost" },
         { label: dict.auth.enterAsAdmin, href: "/admin/login", variant: "primary" },
       ]}
     >
@@ -30,14 +34,10 @@ export default async function HomePage({
         <div className="ps-hero__inner">
           <span className="ps-hero__pill">
             <span className="dot" aria-hidden="true" />
-            Welcome to PowerStats
+            {home.welcome}
           </span>
-          <h1>Run the tournament.<br />Score every point.</h1>
-          <p className="lead">
-            PowerStats is the live scoring, bracket, and stats console for
-            Ultimate Frisbee tournaments. Built for directors who need
-            accurate data when the disc is in the air.
-          </p>
+          <h1>{home.tagline}</h1>
+          <p className="lead">{home.lead}</p>
 
           {unauthorized ? (
             <div
@@ -52,10 +52,10 @@ export default async function HomePage({
 
           <div className="ps-hero__cta">
             <Link className="ps-btn ps-btn--primary" href="/tournaments">
-              Browse tournaments
+              {home.browseTournaments}
             </Link>
             <Link className="ps-btn" href="/rankings">
-              View rankings
+              {home.viewRankings}
             </Link>
             <Link className="ps-btn ps-btn--ghost" href="/admin/login">
               {dict.auth.enterAsAdmin}
@@ -69,9 +69,8 @@ export default async function HomePage({
               fontSize: 13,
             }}
           >
-            Tournament director?{" "}
-            <Link href="/admin/login">{dict.auth.enterAsAdmin}</Link> to manage
-            events.
+            {home.directorCta}{" "}
+            <Link href="/admin/login">{dict.auth.enterAsAdmin}</Link>.
           </p>
         </div>
       </section>
@@ -82,13 +81,9 @@ export default async function HomePage({
         style={{ paddingTop: 0, paddingBottom: 80 }}
       >
         <div className="ps-section" style={{ alignItems: "center", textAlign: "center" }}>
-          <span className="ps-section__eyebrow">Everything you need</span>
-          <h2>From pull to playoff</h2>
-          <p>
-            One console for live scoring, brackets, round-robin scheduling,
-            and player analytics. Wire it to a single field or a 64-team
-            championship.
-          </p>
+          <span className="ps-section__eyebrow">{home.everythingYouNeed}</span>
+          <h2>{home.fromPullToPlayoff}</h2>
+          <p>{home.featuresLead}</p>
         </div>
 
         <div className="ps-grid">
@@ -96,51 +91,42 @@ export default async function HomePage({
             <span className="ps-card__icon" aria-hidden="true">
               01
             </span>
-            <h3>Live scoring</h3>
-            <p>
-              Real-time updates for goals, assists, defenses, timeouts, and
-              halves — directly from the field.
-            </p>
+            <h3>{home.liveScoring}</h3>
+            <p>{home.liveScoringCopy}</p>
             <Link
               href="/tournaments"
               className="ps-card__footer"
               style={{ color: "var(--ps-primary-container)" }}
             >
-              Browse tournaments →
+              {home.browseTournamentsFooter}
             </Link>
           </article>
           <article className="ps-card ps-card--linked">
             <span className="ps-card__icon" aria-hidden="true">
               02
             </span>
-            <h3>Tournament formats</h3>
-            <p>
-              Flexible support for round-robin pools, single-elimination
-              brackets, and multi-phase playoffs.
-            </p>
+            <h3>{home.tournamentFormats}</h3>
+            <p>{home.tournamentFormatsCopy}</p>
             <Link
               href="/tournaments"
               className="ps-card__footer"
               style={{ color: "var(--ps-primary-container)" }}
             >
-              See fixtures →
+              {home.seeFixtures}
             </Link>
           </article>
           <article className="ps-card ps-card--linked">
             <span className="ps-card__icon" aria-hidden="true">
               03
             </span>
-            <h3>Performance insights</h3>
-            <p>
-              Deep dive into team trends, statistical leaders, and
-              cross-tournament player history.
-            </p>
+            <h3>{home.performanceInsights}</h3>
+            <p>{home.performanceInsightsCopy}</p>
             <Link
               href="/rankings"
               className="ps-card__footer"
               style={{ color: "var(--ps-primary-container)" }}
             >
-              View rankings →
+              {home.viewRankingsFooter}
             </Link>
           </article>
         </div>

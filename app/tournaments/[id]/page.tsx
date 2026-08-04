@@ -10,6 +10,7 @@ import {
   teamColor,
   tournamentsApi,
 } from "@/utils/api";
+import { getServerLocale } from "@/utils/i18n-server";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,11 @@ export default async function TournamentDetailPage({
 }: {
   params: Promise<Params>;
 }) {
+  const { dict } = await getServerLocale();
+  const common = dict.common;
+  const trn = dict.tournament;
+  const nav = dict.navigation;
+
   const { id: rawId } = await params;
   const id = Number(rawId);
   if (!Number.isFinite(id)) notFound();
@@ -39,14 +45,15 @@ export default async function TournamentDetailPage({
   return (
     <AppShell
       brandSubtitle={tournament.name}
+      footerText={common.footer}
       authLinks={[
-        { label: "All tournaments", href: "/tournaments", variant: "ghost" },
-        { label: "Rankings", href: "/rankings", variant: "ghost" },
+        { label: trn.title, href: "/tournaments", variant: "ghost" },
+        { label: nav.rankings, href: "/rankings", variant: "ghost" },
       ]}
     >
       <section className="ps-admin">
         <div className="ps-section">
-          <span className="ps-section__eyebrow">Multi-phase tournament</span>
+          <span className="ps-section__eyebrow">{trn.multiPhase}</span>
           <h1>{tournament.name}</h1>
           <p>
             {formatDateRange(tournament.start_date, tournament.end_date)}
@@ -63,13 +70,13 @@ export default async function TournamentDetailPage({
           }}
         >
           <span className="ps-status-badge ps-status-badge--completed">
-            {teams.length} teams
+            {teams.length} {common.teams}
           </span>
           <span className="ps-status-badge ps-status-badge--completed">
-            {completed.length}/{games.length} games played
+            {completed.length}/{games.length} {common.gamesPlayed}
           </span>
           {live.length > 0 ? (
-            <span className="ps-live-pill">{live.length} live</span>
+            <span className="ps-live-pill">{live.length} {common.live}</span>
           ) : null}
         </div>
 
@@ -88,9 +95,9 @@ export default async function TournamentDetailPage({
               }}
             >
               <div>
-                <span className="ps-section__eyebrow">Pool A</span>
+                <span className="ps-section__eyebrow">{trn.poolA}</span>
                 <h2 style={{ fontSize: 18, marginTop: 4 }}>
-                  Classification
+                  {trn.classification}
                 </h2>
               </div>
               <Link
@@ -98,19 +105,19 @@ export default async function TournamentDetailPage({
                 className="ps-btn ps-btn--secondary"
                 style={{ fontSize: 12, padding: "6px 12px" }}
               >
-                View bracket
+                {common.viewBracket}
               </Link>
             </header>
             <table className="ps-table">
               <thead>
                 <tr>
                   <th style={{ width: 40 }}>#</th>
-                  <th>Team</th>
-                  <th style={{ textAlign: "right" }}>W</th>
-                  <th style={{ textAlign: "right" }}>L</th>
-                  <th style={{ textAlign: "right" }}>Diff</th>
-                  <th style={{ textAlign: "right" }}>PF</th>
-                  <th style={{ textAlign: "right" }}>PA</th>
+                  <th>{common.team}</th>
+                  <th style={{ textAlign: "right" }}>{common.wins}</th>
+                  <th style={{ textAlign: "right" }}>{common.lossesShort}</th>
+                  <th style={{ textAlign: "right" }}>{common.diff}</th>
+                  <th style={{ textAlign: "right" }}>{common.pf}</th>
+                  <th style={{ textAlign: "right" }}>{common.pa}</th>
                 </tr>
               </thead>
               <tbody>
@@ -186,49 +193,45 @@ export default async function TournamentDetailPage({
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div className="ps-card">
               <span className="ps-section__eyebrow">Phase 1</span>
-              <h3 style={{ marginTop: 4 }}>Round-robin</h3>
+              <h3 style={{ marginTop: 4 }}>{trn.roundRobin}</h3>
               <p>
-                Every team plays every other team once across{" "}
-                {teams.length > 1
-                  ? `${(teams.length * (teams.length - 1)) / 2}`
-                  : "—"}
-                {" "}fixtures. Top four advance to the bracket.
+                {trn.roundRobinCopy.replace(
+                  "{fixtures}",
+                  teams.length > 1
+                    ? `${(teams.length * (teams.length - 1)) / 2}`
+                    : "—",
+                )}
               </p>
               <Link
                 href={`/tournaments/${tournament.id}/bracket`}
                 className="ps-btn"
                 style={{ marginTop: 8, alignSelf: "flex-start" }}
               >
-                See bracket
+                {trn.bracket}
               </Link>
             </div>
             <div className="ps-card">
               <span className="ps-section__eyebrow">Phase 2</span>
-              <h3 style={{ marginTop: 4 }}>Playoffs</h3>
-              <p>
-                Single-elimination bracket with quarterfinals, semifinals, and
-                finals — plus consolation games to decide 3rd–6th place.
-              </p>
+              <h3 style={{ marginTop: 4 }}>{trn.playoffs}</h3>
+              <p>{trn.playoffsCopy}</p>
               <Link
                 href={`/tournaments/${tournament.id}/bracket`}
                 className="ps-btn"
                 style={{ marginTop: 8, alignSelf: "flex-start" }}
               >
-                Bracket
+                {trn.bracket}
               </Link>
             </div>
             <div className="ps-card">
               <span className="ps-section__eyebrow">Stats</span>
-              <h3 style={{ marginTop: 4 }}>Leaderboards</h3>
-              <p>
-                Top scorers, assist leaders, and Spirit of the Game standings.
-              </p>
+              <h3 style={{ marginTop: 4 }}>{trn.leaderboards}</h3>
+              <p>{trn.leaderboardsCopy}</p>
               <Link
                 href={`/tournaments/${tournament.id}/public`}
                 className="ps-btn"
                 style={{ marginTop: 8, alignSelf: "flex-start" }}
               >
-                View stats
+                {common.viewStats}
               </Link>
             </div>
           </div>

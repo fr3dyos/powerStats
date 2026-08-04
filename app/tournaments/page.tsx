@@ -7,10 +7,16 @@ import {
   tournamentsApi,
   teamsApi,
 } from "@/utils/api";
+import { getServerLocale } from "@/utils/i18n-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function TournamentsListPage() {
+  const { dict } = await getServerLocale();
+  const common = dict.common;
+  const trn = dict.tournament;
+  const nav = dict.navigation;
+
   const tournaments = await tournamentsApi.list(100).catch(() => []);
   // Pre-fetch team counts so each card shows the team count without N+1.
   const teamCounts = await Promise.all(
@@ -28,29 +34,23 @@ export default async function TournamentsListPage() {
   return (
     <AppShell
       brandSubtitle="Ultimate Frisbee tournament manager"
+      footerText={common.footer}
       authLinks={[
-        { label: "Rankings", href: "/rankings", variant: "ghost" },
-        { label: "Admin", href: "/admin/login", variant: "ghost" },
+        { label: nav.rankings, href: "/rankings", variant: "ghost" },
+        { label: nav.admin, href: "/admin/login", variant: "ghost" },
       ]}
     >
       <section className="ps-admin">
         <div className="ps-section">
-          <span className="ps-section__eyebrow">Browse</span>
-          <h1>Tournaments</h1>
-          <p>
-            Every tournament run on PowerStats — past, present, and upcoming.
-            Open one to see the bracket, the leaderboards, and the per-team
-            performance.
-          </p>
+          <span className="ps-section__eyebrow">{trn.browse}</span>
+          <h1>{trn.title}</h1>
+          <p>{trn.subtitle}</p>
         </div>
 
         {tournaments.length === 0 ? (
           <div className="ps-card">
-            <h3>No tournaments yet</h3>
-            <p>
-              When an organizer publishes a tournament, it will appear here.
-              Sign in as an admin to create one.
-            </p>
+            <h3>{common.noTournaments}</h3>
+            <p>{trn.noTournamentsCopy}</p>
           </div>
         ) : (
           <div className="ps-card-list">
@@ -75,7 +75,7 @@ export default async function TournamentsListPage() {
                     }}
                   >
                     <span className="ps-pill">
-                      {countById.get(t.id) ?? 0} teams
+                      {countById.get(t.id) ?? 0} {common.teams}
                     </span>
                     <span
                       className="ps-card__icon"
@@ -103,7 +103,7 @@ export default async function TournamentsListPage() {
                       📍 {t.location}
                     </p>
                   ) : null}
-                  <span className="ps-card__footer">View tournament →</span>
+                  <span className="ps-card__footer">{common.viewTournament} →</span>
                 </Link>
               );
             })}

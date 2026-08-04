@@ -4,6 +4,10 @@ import ptBR from "@/pt-BR.json";
 
 export type Locale = "en" | "es" | "pt-BR";
 
+export const LOCALES: Locale[] = ["en", "es", "pt-BR"];
+
+export const LOCALE_COOKIE = "ps_locale";
+
 const dictionaries: Record<Locale, Record<string, any>> = {
   en,
   es,

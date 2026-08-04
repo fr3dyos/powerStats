@@ -29,9 +29,13 @@ export default async function TeamProfilePage({
   const team = await teamsApi.get(teamId).catch(() => null);
   if (!team) notFound();
 
-  const tournament = await tournamentsApi
-    .get(team.tournament_id)
-    .catch(() => null);
+  const [tournament, tournamentTeams] = await Promise.all([
+    tournamentsApi.get(team.tournament_id).catch(() => null),
+    teamsApi.listByTournament(team.tournament_id).catch(() => []),
+  ]);
+  const teamNameById = new Map(
+    tournamentTeams.map((t) => [t.id, t.name] as const),
+  );
 
   const allGames: Game[] = [...(team.home_games ?? []), ...(team.away_games ?? [])]
     .sort((a, b) => {
@@ -229,7 +233,9 @@ export default async function TeamProfilePage({
                     const us = isHome ? g.home_score : g.away_score;
                     const them = isHome ? g.away_score : g.home_score;
                     const opponentId = isHome ? g.away_team_id : g.home_team_id;
-                    const opponent = isHome ? g.away_team?.name : g.home_team?.name;
+                    const opponent =
+                      teamNameById.get(opponentId) ??
+                      (isHome ? g.away_team?.name : g.home_team?.name);
                     let result: { label: string; tone: "win" | "loss" | "pending" };
                     if (!g.is_completed) {
                       result = { label: "Pending", tone: "pending" };

@@ -7,7 +7,9 @@ import {
   gamesApi,
   teamsApi,
   tournamentsApi,
+  type Game,
 } from "@/utils/api";
+import { getServerLocale } from "@/utils/i18n-server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,15 +17,7 @@ type Params = { id: string };
 
 /** Group games by round label (e.g. "4tos", "semis", "Final") for the bracket view. */
 function groupRounds(
-  games: Array<{
-    id: number;
-    home_team_id: number;
-    away_team_id: number;
-    home_score: number;
-    away_score: number;
-    is_completed: boolean;
-    start_time: string | null;
-  }>,
+  games: Game[],
   teamMap: Map<number, { id: number; name: string }>,
 ) {
   const total = games.length;
@@ -51,7 +45,7 @@ function groupRounds(
 
   const rounds: Array<{
     label: string;
-    games: typeof sorted;
+    games: Game[];
   }> = [];
 
   const labels =
@@ -80,6 +74,11 @@ export default async function TournamentBracketPage({
 }: {
   params: Promise<Params>;
 }) {
+  const { dict } = await getServerLocale();
+  const common = dict.common;
+  const brk = dict.bracket;
+  const nav = dict.navigation;
+
   const { id: rawId } = await params;
   const id = Number(rawId);
   if (!Number.isFinite(id)) notFound();
@@ -91,7 +90,9 @@ export default async function TournamentBracketPage({
   ]);
   if (!tournament) notFound();
 
-  const teamMap = new Map(teams.map((t) => [t.id, t]));
+  const teamMap = new Map<number, { id: number; name: string }>(
+    teams.map((t) => [t.id, { id: t.id, name: t.name }] as const),
+  );
   const bracketGames = games.filter((g) => g.start_time !== null);
   const liveGames = games.filter((g) => !g.is_completed);
   const rounds = groupRounds(bracketGames, teamMap);
@@ -99,19 +100,17 @@ export default async function TournamentBracketPage({
   return (
     <AppShell
       brandSubtitle={`${tournament.name} · Bracket`}
+      footerText={common.footer}
       authLinks={[
         { label: "← Tournament hub", href: `/tournaments/${id}`, variant: "ghost" },
-        { label: "Stats", href: `/tournaments/${id}/public`, variant: "ghost" },
+        { label: nav.rankings, href: "/rankings", variant: "ghost" },
       ]}
     >
       <section className="ps-admin">
         <div className="ps-section">
-          <span className="ps-section__eyebrow">Tournament bracket</span>
-          <h1>Playoffs &amp; live rounds</h1>
-          <p>
-            Every fixture from the bracket phase — quarterfinals, semifinals,
-            finals, and the consolation games that decide 3rd and 5th place.
-          </p>
+          <span className="ps-section__eyebrow">{brk.eyebrow}</span>
+          <h1>{brk.title}</h1>
+          <p>{brk.subtitle}</p>
         </div>
 
         {liveGames.length > 0 ? (
@@ -132,10 +131,11 @@ export default async function TournamentBracketPage({
                 flexWrap: "wrap",
               }}
             >
-              <span className="ps-live-pill">Live now</span>
+              <span className="ps-live-pill">{common.liveNow}</span>
               <strong>{liveGames.length}</strong>
               <span style={{ color: "var(--ps-text-muted)" }}>
-                {liveGames.length === 1 ? "game" : "games"} in progress
+                {liveGames.length === 1 ? common.game : common.games}{" "}
+                {common.inProgress}
               </span>
             </div>
             <div
@@ -230,7 +230,7 @@ export default async function TournamentBracketPage({
                         }}
                       >
                         {formatDate(g.start_time)}
-                        {g.field_number ? ` · Field ${g.field_number}` : ""}
+                        {g.field_number ? ` · ${common.field} ${g.field_number}` : ""}
                       </div>
                     </Link>
                   );
@@ -245,17 +245,14 @@ export default async function TournamentBracketPage({
             className="ps-card"
             style={{ marginTop: 24, textAlign: "center" }}
           >
-            <h3>No bracket games yet</h3>
-            <p>
-              Use the admin dashboard to generate the bracket once the round-robin
-              finishes.
-            </p>
+            <h3>{brk.noBracketGames}</h3>
+            <p>{brk.noBracketGamesCopy}</p>
             <Link
               href={`/tournaments/${id}`}
               className="ps-btn"
               style={{ marginTop: 12 }}
             >
-              ← Back to tournament hub
+              ← {common.backToTournament}
             </Link>
           </div>
         ) : null}

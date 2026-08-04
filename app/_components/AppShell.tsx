@@ -1,6 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { LanguageSwitcher } from "@/app/_components/LanguageSwitcher";
+import { ThemeToggle } from "@/app/_components/ThemeToggle";
+
 type AuthLink = {
   label: string;
   href: string;
@@ -11,9 +14,11 @@ type Props = {
   children: ReactNode;
   authLinks?: AuthLink[];
   brandSubtitle?: string;
+  /** Optional localized footer text. Defaults to English. */
+  footerText?: string;
 };
 
-export function AppShell({ children, authLinks, brandSubtitle }: Props) {
+export function AppShell({ children, authLinks, brandSubtitle, footerText }: Props) {
   return (
     <div className="ps-app">
       <header className="ps-header" role="banner">
@@ -27,6 +32,8 @@ export function AppShell({ children, authLinks, brandSubtitle }: Props) {
           </span>
         </Link>
         <nav className="ps-header__nav" aria-label="Primary">
+          <ThemeToggle />
+          <LanguageSwitcher />
           {authLinks?.map((link) => (
             <Link
               key={link.href}
@@ -42,7 +49,10 @@ export function AppShell({ children, authLinks, brandSubtitle }: Props) {
       </header>
       <main className="ps-main">{children}</main>
       <footer className="ps-footer">
-        <span>© {new Date().getFullYear()} PowerStats — built for Ultimate.</span>
+        <span>
+          © {new Date().getFullYear()} PowerStats —{" "}
+          {footerText ?? "built for Ultimate."}
+        </span>
       </footer>
     </div>
   );

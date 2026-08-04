@@ -9,8 +9,12 @@
   --ps-surface-container-lowest: #0e0e0e;
   --ps-surface-container-low: #1c1b1b;
   --ps-surface-container: #201f1f;
-  --ps-surface-container-high: #2a2a2a;
+--ps-surface-container-high: #2a2a2a;
   --ps-surface-container-highest: #353534;
+  /* Level 2 (Modals/Popovers) — #1E1E1E with a soft shadow + orange top border */
+  --ps-surface-raised: #1e1e1e;
+  /* Input fields are darker than the card surface (#080808) */
+  --ps-input-bg: #080808;
 
   /* Borders / dividers */
   --ps-border: #262626;
@@ -90,6 +94,82 @@
   --ps-container-padding-mobile: 16px;
   --ps-gutter: 24px;
   --ps-card-gap: 16px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* PowerStats — Light theme                                               */
+/* ---------------------------------------------------------------------- */
+:root[data-theme="light"] {
+  /* Surfaces */
+  --ps-bg: #f6f5f4;
+  --ps-surface: #ffffff;
+  --ps-surface-container-lowest: #fbfbfb;
+  --ps-surface-container-low: #f0efee;
+  --ps-surface-container: #eae8e7;
+  --ps-surface-container-high: #e0dedd;
+  --ps-surface-container-highest: #d4d2d1;
+
+  /* Borders / dividers */
+  --ps-border: #e2e0df;
+  --ps-border-strong: #c8c6c4;
+  --ps-outline: #8a5a4a;
+  --ps-outline-variant: #c89a8a;
+
+  /* Primary — Action Orange */
+  --ps-primary: #c2410c;
+  --ps-primary-container: #f97316;
+  --ps-on-primary: #ffffff;
+  --ps-on-primary-container: #ffffff;
+  --ps-primary-fixed: #ffedd5;
+  --ps-primary-fixed-dim: #fed7aa;
+  --ps-on-primary-fixed: #7c2d12;
+  --ps-on-primary-fixed-variant: #9a3412;
+
+  /* Secondary — Tournament Teal */
+  --ps-secondary: #0f766e;
+  --ps-secondary-container: #14b8a6;
+  --ps-on-secondary: #ffffff;
+  --ps-on-secondary-container: #ffffff;
+  --ps-secondary-fixed: #ccfbf1;
+  --ps-secondary-fixed-dim: #99f6e4;
+  --ps-on-secondary-fixed: #134e4a;
+
+  /* Tertiary — Neon Lime */
+  --ps-tertiary: #65a30d;
+  --ps-tertiary-container: #84cc16;
+  --ps-on-tertiary: #ffffff;
+  --ps-on-tertiary-container: #365314;
+  --ps-tertiary-fixed: #ecfccb;
+  --ps-tertiary-fixed-dim: #d9f99d;
+  --ps-lime: #65a30d;
+
+  /* Text */
+  --ps-text: #1c1917;
+  --ps-text-muted: #44403c;
+  --ps-text-subtle: #78716c;
+  --ps-on-surface-variant: #44403c;
+
+  /* Status */
+  --ps-success: #15803d;
+  --ps-pending: #b45309;
+  --ps-danger: #dc2626;
+  --ps-success-soft: rgba(21, 128, 61, 0.12);
+  --ps-pending-soft: rgba(180, 83, 9, 0.12);
+  --ps-danger-soft: rgba(220, 38, 38, 0.12);
+  --ps-primary-soft: rgba(249, 115, 22, 0.14);
+  --ps-secondary-soft: rgba(20, 184, 166, 0.14);
+  --ps-tertiary-soft: rgba(132, 204, 22, 0.14);
+
+/* Shadows — softer on light backgrounds */
+  --ps-shadow-sm: 0 6px 18px rgba(0, 0, 0, 0.08);
+  --ps-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+/* Header background for light theme */
+  --ps-header-bg: rgba(255, 255, 255, 0.85);
+
+  /* Modals / popovers + input fields for light theme */
+  --ps-surface-raised: #ffffff;
+  --ps-input-bg: #f3f2f1;
 }
 
 * {
@@ -180,8 +260,8 @@ h4 {
   align-items: center;
   justify-content: space-between;
   padding: 18px var(--ps-container-padding);
-  border-bottom: 1px solid var(--ps-border);
-  background-color: rgba(10, 10, 10, 0.85);
+border-bottom: 1px solid var(--ps-border);
+  background-color: var(--ps-header-bg, rgba(10, 10, 10, 0.85));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   position: sticky;
@@ -218,6 +298,53 @@ h4 {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* Language switcher */
+.ps-lang-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--ps-border);
+  border-radius: var(--ps-radius-lg);
+  background-color: var(--ps-surface-container-low);
+}
+.ps-lang-btn {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 8px;
+  border-radius: var(--ps-radius);
+  color: var(--ps-text-muted);
+  letter-spacing: 0.02em;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+.ps-lang-btn:hover {
+  color: var(--ps-text);
+  background-color: var(--ps-surface-container-high);
+}
+.ps-lang-btn--active {
+  background-color: var(--ps-primary-container);
+  color: #fff;
+}
+.ps-lang-btn--active:hover {
+  background-color: var(--ps-primary-container);
+  color: #fff;
+}
+
+/* Theme toggle */
+.ps-theme-toggle .ps-theme-toggle__label {
+  display: none;
+}
+.ps-theme-toggle {
+  padding: 8px 10px;
+}
+@media (min-width: 640px) {
+  .ps-theme-toggle .ps-theme-toggle__label {
+    display: inline;
+  }
 }
 
 .ps-btn {
@@ -473,7 +600,7 @@ h4 {
 }
 .ps-input {
   width: 100%;
-  background-color: var(--ps-surface-container-lowest);
+  background-color: var(--ps-input-bg, var(--ps-surface-container-lowest));
   color: var(--ps-text);
   border: 1px solid var(--ps-border);
   border-radius: var(--ps-radius);
@@ -702,6 +829,17 @@ a.ps-card:hover,
   text-transform: uppercase;
 }
 
+/* Level 2 — Modals / Popovers (per DESIGN.md): #1E1E1E surface, soft shadow,
+   and a 2px Primary Orange top border to denote activity. */
+.ps-modal {
+  background-color: var(--ps-surface-raised, #1e1e1e);
+  border: 1px solid var(--ps-border);
+  border-top: 2px solid var(--ps-primary-container);
+  border-radius: var(--ps-radius-lg);
+  box-shadow: var(--ps-shadow);
+  padding: 24px;
+}
+
 .ps-loading {
   display: flex;
   align-items: center;
@@ -881,14 +1019,14 @@ a.ps-card:hover,
   letter-spacing: 0.06em;
 }
 .ps-status-badge--active {
-  background-color: var(--ps-secondary-soft);
-  color: var(--ps-secondary);
-  border: 1px solid rgba(118, 214, 213, 0.4);
+  background-color: var(--ps-secondary-container);
+  color: #fff;
+  border: 1px solid var(--ps-secondary-container);
 }
 .ps-status-badge--pending {
-  background-color: var(--ps-pending-soft);
-  color: var(--ps-pending);
-  border: 1px solid rgba(255, 193, 7, 0.4);
+  background-color: var(--ps-surface-container-high);
+  color: var(--ps-primary-container);
+  border: 1px solid var(--ps-border);
 }
 .ps-status-badge--completed {
   background-color: var(--ps-surface-container-high);
@@ -1012,7 +1150,12 @@ a.ps-card:hover,
   justify-content: center;
 }
 .ps-bracket__match--winner {
+  border-left-width: 3px;
   border-left-color: var(--ps-secondary);
+}
+.ps-bracket__match--live {
+  border: 1px solid var(--ps-lime);
+  border-left: 3px solid var(--ps-lime);
 }
 .ps-bracket__team {
   display: flex;

@@ -9,9 +9,11 @@ import {
   teamsApi,
   teamColor,
   tournamentsApi,
+  type Game,
   type Player,
   type Team,
 } from "@/utils/api";
+import { getServerLocale } from "@/utils/i18n-server";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,11 @@ export default async function TournamentPublicStatsPage({
 }: {
   params: Promise<Params>;
 }) {
+  const { dict } = await getServerLocale();
+  const common = dict.common;
+  const pub = dict.publicStats;
+  const nav = dict.navigation;
+
   const { id: rawId } = await params;
   const id = Number(rawId);
   if (!Number.isFinite(id)) notFound();
@@ -77,26 +84,27 @@ export default async function TournamentPublicStatsPage({
     .slice(0, 5)
     .map((r) => ({ player: r.player, value: r.stats!.defenses }));
 
-  const games = await gamesApi.listByTournament(id).catch(() => []);
-  const totalGoals = games.reduce((acc, g) => acc + g.home_score + g.away_score, 0);
+  const games: Game[] = await gamesApi.listByTournament(id).catch(() => []);
+  const totalGoals = games.reduce(
+    (acc, g) => acc + (g.home_score ?? 0) + (g.away_score ?? 0),
+    0,
+  );
   const completed = games.filter((g) => g.is_completed).length;
 
   return (
     <AppShell
       brandSubtitle={`${tournament.name} · Stats`}
+      footerText={common.footer}
       authLinks={[
         { label: "← Tournament hub", href: `/tournaments/${id}`, variant: "ghost" },
-        { label: "Bracket", href: `/tournaments/${id}/bracket`, variant: "ghost" },
+        { label: nav.rankings, href: "/rankings", variant: "ghost" },
       ]}
     >
       <section className="ps-admin">
         <div className="ps-section">
-          <span className="ps-section__eyebrow">Public stats</span>
-          <h1>Player &amp; team leaderboards</h1>
-          <p>
-            Top performers from the tournament — scorers, playmakers, and
-            defenders. Click any player to see their full profile.
-          </p>
+          <span className="ps-section__eyebrow">{pub.publicStatsTitle}</span>
+          <h1>{pub.title}</h1>
+          <p>{pub.subtitle}</p>
         </div>
 
         <div
@@ -109,21 +117,21 @@ export default async function TournamentPublicStatsPage({
         >
           <div className="ps-stat-tile">
             <span className="ps-stat-tile__value">{totalGoals}</span>
-            <span className="ps-stat-tile__label">Goals scored</span>
+            <span className="ps-stat-tile__label">{pub.goalsScored}</span>
           </div>
           <div className="ps-stat-tile">
             <span className="ps-stat-tile__value">{teams.length}</span>
-            <span className="ps-stat-tile__label">Teams</span>
+            <span className="ps-stat-tile__label">{common.teams}</span>
           </div>
           <div className="ps-stat-tile">
             <span className="ps-stat-tile__value">{allPlayers.length}</span>
-            <span className="ps-stat-tile__label">Players</span>
+            <span className="ps-stat-tile__label">{common.players}</span>
           </div>
           <div className="ps-stat-tile">
             <span className="ps-stat-tile__value ps-stat-tile__value--accent">
               {completed}
             </span>
-            <span className="ps-stat-tile__label">Games played</span>
+            <span className="ps-stat-tile__label">{common.gamesPlayed}</span>
           </div>
         </div>
 
@@ -136,35 +144,33 @@ export default async function TournamentPublicStatsPage({
             }}
           >
             <Leaderboard
-              title="Top scorers"
+              title={pub.topScorers}
               rows={goalLeaders}
-              valueSuffix="goals"
+              valueSuffix={pub.goals}
             />
             <Leaderboard
-              title="Top assists"
+              title={pub.topAssists}
               rows={assistLeaders}
-              valueSuffix="assists"
+              valueSuffix={pub.assists}
             />
             <Leaderboard
-              title="Top defenses"
+              title={pub.topDefenses}
               rows={defenseLeaders}
-              valueSuffix="defenses"
+              valueSuffix={pub.defenses}
             />
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div className="ps-card">
-              <span className="ps-section__eyebrow">Spirit of the Game</span>
-              <h3 style={{ marginTop: 4 }}>SOTG standings</h3>
+              <span className="ps-section__eyebrow">{pub.spiritOfTheGame}</span>
+              <h3 style={{ marginTop: 4 }}>{pub.sotgStandings}</h3>
               <p style={{ color: "var(--ps-text-muted)", fontSize: 13 }}>
-                Spirit scores are not yet collected for this tournament. They
-                will appear here once the tournament director enables SOTG
-                ratings after each game.
+                {pub.sotgNotCollected}
               </p>
             </div>
             <div className="ps-card">
-              <span className="ps-section__eyebrow">Top teams</span>
-              <h3 style={{ marginTop: 4 }}>By goals scored</h3>
+              <span className="ps-section__eyebrow">{pub.topTeams}</span>
+              <h3 style={{ marginTop: 4 }}>{pub.byGoalsScored}</h3>
               <ol
                 style={{
                   paddingLeft: 0,
@@ -261,7 +267,7 @@ function Leaderboard({
         <h3 className="ps-leaderboard__title">{title}</h3>
         {rows.length === 0 ? (
           <p style={{ color: "var(--ps-text-muted)", fontSize: 13, margin: 0 }}>
-            No {valueSuffix} recorded yet.
+            {valueSuffix}
           </p>
         ) : (
           rows.map((row, i) => (

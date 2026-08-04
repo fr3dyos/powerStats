@@ -213,6 +213,8 @@ export type Game = {
   is_completed: boolean;
   created_at: string;
   updated_at: string | null;
+  home_team?: Team;
+  away_team?: Team;
 };
 
 export type GameEventType =
