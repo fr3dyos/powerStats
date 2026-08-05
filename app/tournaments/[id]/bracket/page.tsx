@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/app/_components/AppShell";
@@ -10,6 +11,7 @@ import {
   type Game,
 } from "@/utils/api";
 import { getServerLocale } from "@/utils/i18n-server";
+import { getAuthedUser } from "@/utils/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -74,10 +76,15 @@ export default async function TournamentBracketPage({
 }: {
   params: Promise<Params>;
 }) {
-  const { dict } = await getServerLocale();
+const { dict } = await getServerLocale();
   const common = dict.common;
   const brk = dict.bracket;
   const nav = dict.navigation;
+  const matchDict = dict.match;
+
+  const { user, role } = await getAuthedUser(await cookies());
+  void user;
+  const canScore = role === "admin" || role === "scorekeeper";
 
   const { id: rawId } = await params;
   const id = Number(rawId);
@@ -146,22 +153,40 @@ export default async function TournamentBracketPage({
                 flexWrap: "wrap",
               }}
             >
-              {liveGames.map((g) => {
+{liveGames.map((g) => {
                 const home = teamMap.get(g.home_team_id);
                 const away = teamMap.get(g.away_team_id);
                 return (
-                  <Link
+                  <div
                     key={g.id}
-                    href={`/admin/games/${g.id}/score`}
-                    className="ps-pill"
                     style={{
-                      textDecoration: "none",
-                      background: "var(--ps-surface-container-high)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
                     }}
                   >
-                    {home?.name ?? "?"} {g.home_score}-{g.away_score}{" "}
-                    {away?.name ?? "?"}
-                  </Link>
+                    <Link
+                      href={`/games/${g.id}`}
+                      className="ps-pill"
+                      style={{
+                        textDecoration: "none",
+                        background: "var(--ps-surface-container-high)",
+                      }}
+                    >
+                      {home?.name ?? "?"} {g.home_score}-{g.away_score}{" "}
+                      {away?.name ?? "?"}
+                    </Link>
+                    {canScore ? (
+                      <Link
+                        href={`/admin/games/${g.id}/score`}
+                        className="ps-btn ps-btn--ghost"
+                        title={matchDict.scoreAdmin}
+                        style={{ fontSize: 11, padding: "4px 10px" }}
+                      >
+                        {matchDict.score}
+                      </Link>
+                    ) : null}
+                  </div>
                 );
               })}
             </div>
@@ -182,13 +207,11 @@ export default async function TournamentBracketPage({
                         ? "home"
                         : "away"
                       : null;
-                  return (
-                    <Link
+return (
+                    <div
                       key={g.id}
-                      href={`/admin/games/${g.id}/score`}
                       className="ps-bracket__match"
                       style={{
-                        textDecoration: "none",
                         color: "inherit",
                         borderLeftColor:
                           winner === "home"
@@ -198,41 +221,68 @@ export default async function TournamentBracketPage({
                               : "var(--ps-border)",
                       }}
                     >
-                      <div
-                        className={
-                          winner === "home"
-                            ? "ps-bracket__team ps-bracket__team--winner"
-                            : "ps-bracket__team"
-                        }
+                      <Link
+                        href={`/games/${g.id}`}
+                        style={{ textDecoration: "none", color: "inherit" }}
                       >
-                        <span>{home?.name ?? "TBD"}</span>
-                        <span className="ps-bracket__team-score">
-                          {g.home_score}
-                        </span>
-                      </div>
-                      <div
-                        className={
-                          winner === "away"
-                            ? "ps-bracket__team ps-bracket__team--winner"
-                            : "ps-bracket__team"
-                        }
-                      >
-                        <span>{away?.name ?? "TBD"}</span>
-                        <span className="ps-bracket__team-score">
-                          {g.away_score}
-                        </span>
-                      </div>
+                        <div
+                          className={
+                            winner === "home"
+                              ? "ps-bracket__team ps-bracket__team--winner"
+                              : "ps-bracket__team"
+                          }
+                        >
+                          <span>{home?.name ?? "TBD"}</span>
+                          <span className="ps-bracket__team-score">
+                            {g.home_score}
+                          </span>
+                        </div>
+                        <div
+                          className={
+                            winner === "away"
+                              ? "ps-bracket__team ps-bracket__team--winner"
+                              : "ps-bracket__team"
+                          }
+                        >
+                          <span>{away?.name ?? "TBD"}</span>
+                          <span className="ps-bracket__team-score">
+                            {g.away_score}
+                          </span>
+                        </div>
+                      </Link>
                       <div
                         style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 8,
                           fontSize: 11,
                           color: "var(--ps-text-muted)",
                           marginTop: 4,
                         }}
                       >
-                        {formatDate(g.start_time)}
-                        {g.field_number ? ` · ${common.field} ${g.field_number}` : ""}
+                        <span>
+                          {formatDate(g.start_time)}
+                          {g.field_number
+                            ? ` · ${common.field} ${g.field_number}`
+                            : ""}
+                        </span>
+                        {canScore ? (
+                          <Link
+                            href={`/admin/games/${g.id}/score`}
+                            title={matchDict.scoreAdmin}
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              textDecoration: "none",
+                              color: "var(--ps-secondary)",
+                            }}
+                          >
+                            {matchDict.score}
+                          </Link>
+                        ) : null}
                       </div>
-                    </Link>
+                    </div>
                   );
                 })}
               </div>
