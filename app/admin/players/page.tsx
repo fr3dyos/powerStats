@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/AppShell";
 import { SignOutButton } from "@/app/_components/SignOutButton";
 import { getAuthedUser } from "@/utils/supabase/server";
-import { getDictionary, pickLocale } from "@/utils/i18n";
+import { getServerLocale } from "@/utils/i18n-server";
 import {
   formatPlayerName,
   playersApi,
@@ -31,9 +31,11 @@ export default async function AdminPlayersPage() {
     redirect("/?error=unauthorized");
   }
 
-  const dict = getDictionary(pickLocale(undefined));
+const { dict } = await getServerLocale();
   const auth = dict.auth;
   const dashboard = dict.adminDashboard;
+  const ap = dict.adminPlayers;
+  const nav = dict.navigation;
 
   // Gather every tournament, its teams, and every player on those teams to
   // build the full player directory.
@@ -63,32 +65,33 @@ export default async function AdminPlayersPage() {
   return (
     <AppShell
       brandSubtitle={auth.adminBrand}
-      authLinks={[
-        { label: "Dashboard", href: "/admin", variant: "ghost" },
-        { label: "Teams", href: "/admin/teams", variant: "ghost" },
-        { label: "Tournaments", href: "/tournaments", variant: "ghost" },
+authLinks={[
+        { label: dashboard.title, href: "/admin", variant: "ghost" },
+        { label: nav.teams, href: "/admin/teams", variant: "ghost" },
+        { label: nav.tournaments, href: "/tournaments", variant: "ghost" },
       ]}
     >
       <section className="ps-admin">
         <header className="ps-admin__header">
           <div className="ps-admin__title">
-            <h1>Players</h1>
+            <h1>{ap.title}</h1>
             <span className="ps-status-pill" aria-live="polite">
-              {totalPlayers} players across {tournaments.length} tournaments
+              {ap.summary
+                .replace("{total}", String(totalPlayers))
+                .replace("{count}", String(tournaments.length))}
             </span>
           </div>
           <SignOutButton label={auth.signOut} />
         </header>
 
         <p className="ps-admin__subtitle">
-          {dashboard.playersCopy} Full player directory with cross-tournament
-          history.
+          {dashboard.playersCopy} {ap.title.toLowerCase()} directory.
         </p>
 
         {allPlayers.length === 0 ? (
           <div className="ps-card">
-            <h3>No players yet</h3>
-            <p>Register teams and players to see them here.</p>
+            <h3>{ap.emptyTitle}</h3>
+            <p>{ap.emptyCopy}</p>
           </div>
         ) : (
           <div className="ps-card" style={{ padding: 0, overflow: "hidden" }}>
@@ -96,9 +99,9 @@ export default async function AdminPlayersPage() {
               <thead>
                 <tr>
                   <th style={{ width: 40 }}>#</th>
-                  <th>Player</th>
-                  <th>Team</th>
-                  <th style={{ textAlign: "right" }}>Jersey</th>
+                  <th>{ap.player}</th>
+                  <th>{ap.team}</th>
+                  <th style={{ textAlign: "right" }}>{ap.jersey}</th>
                 </tr>
               </thead>
               <tbody>

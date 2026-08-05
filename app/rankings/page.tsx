@@ -15,7 +15,7 @@ import {
 } from "@/utils/api";
 import { getServerLocale } from "@/utils/i18n-server";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export default async function RankingsPage() {
   const { dict } = await getServerLocale();
@@ -113,8 +113,8 @@ const assistRanking = [...playerGoalTotals.values()]
     .slice(0, 10);
 
   return (
-    <AppShell
-      brandSubtitle="League-wide rankings & performance"
+<AppShell
+      brandSubtitle={rk.title}
       footerText={common.footer}
       authLinks={[
         { label: nav.tournaments, href: "/tournaments", variant: "ghost" },
@@ -156,12 +156,12 @@ const assistRanking = [...playerGoalTotals.values()]
               <table className="ps-table">
                 <thead>
                   <tr>
-                    <th style={{ width: 40 }}>#</th>
-                    <th>Team</th>
-                    <th style={{ textAlign: "right" }}>W</th>
-                    <th style={{ textAlign: "right" }}>L</th>
-                    <th style={{ textAlign: "right" }}>PF</th>
-                    <th style={{ textAlign: "right" }}>PA</th>
+                  <th style={{ width: 40 }}>#</th>
+                    <th>{common.team}</th>
+                    <th style={{ textAlign: "right" }}>{common.wins}</th>
+                    <th style={{ textAlign: "right" }}>{common.lossesShort}</th>
+                    <th style={{ textAlign: "right" }}>{common.pf}</th>
+                    <th style={{ textAlign: "right" }}>{common.pa}</th>
                   </tr>
                 </thead>
                 <tbody>

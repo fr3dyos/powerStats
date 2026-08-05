@@ -223,6 +223,33 @@ class GameEvent(Base):
     game = relationship("Game", back_populates="game_events")
     player = relationship("Player", back_populates="game_events")
 
+# Spirit of the Game (SOTG) score model.
+# Stores the five WFDF SOTG category scores (0-4 each) plus their total.
+# Persisted per (tournament, team, team_against); the spirit import endpoint
+# upserts on this unique combination.
+class SpiritScore(Base):
+    __tablename__ = "spirit_scores"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tournament_id = Column(Integer, ForeignKey("tournaments.id"), nullable=False)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    team_against_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    # WFDF SOTG categories.
+    score_1 = Column(Integer, nullable=False, default=0)  # rules knowledge
+    score_2 = Column(Integer, nullable=False, default=0)  # fouls & contact
+    score_3 = Column(Integer, nullable=False, default=0)  # fair-mindedness
+    score_4 = Column(Integer, nullable=False, default=0)  # positive attitude
+    score_5 = Column(Integer, nullable=False, default=0)  # communication
+    total = Column(Integer, nullable=False, default=0)  # sum of the five scores
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    tournament = relationship("Tournament")
+    team = relationship("Team", foreign_keys=[team_id])
+    team_against = relationship("Team", foreign_keys=[team_against_id])
+
+
 # PlayerTournamentStats model
 class PlayerTournamentStats(Base):
     __tablename__ = "player_tournament_stats"

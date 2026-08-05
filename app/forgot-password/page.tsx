@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useId, useState } from "react";
 
 import { AuthLockup } from "@/app/_components/AuthLockup";
-import { getDictionary, pickLocale } from "@/utils/i18n";
+import { LanguageSwitcher } from "@/app/_components/LanguageSwitcher";
+import { ThemeToggle } from "@/app/_components/ThemeToggle";
+import { useI18n } from "@/app/_components/I18nProvider";
 import { createClient } from "@/utils/supabase/client";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -15,7 +17,8 @@ type Status =
   | { kind: "success"; message: string };
 
 export default function ForgotPasswordPage() {
-  const dict = getDictionary(pickLocale(undefined)).auth;
+  const { dict } = useI18n();
+  const auth = dict.auth;
   const emailId = useId();
   const statusId = useId();
   const [email, setEmail] = useState("");
@@ -26,9 +29,9 @@ export default function ForgotPasswordPage() {
     event.preventDefault();
     if (pending) return;
 
-    const trimmedEmail = email.trim();
+const trimmedEmail = email.trim();
     if (!trimmedEmail || !EMAIL_PATTERN.test(trimmedEmail)) {
-      setStatus({ kind: "error", message: dict.emailRequired });
+      setStatus({ kind: "error", message: auth.emailRequired });
       return;
     }
 
@@ -48,32 +51,45 @@ export default function ForgotPasswordPage() {
       // Whether or not the email exists, show the same generic message —
       // never reveal account presence. On an error we still surface the
       // safe copy.
-      if (error) {
-        setStatus({ kind: "success", message: dict.resetEmailSent });
+if (error) {
+        setStatus({ kind: "success", message: auth.resetEmailSent });
       } else {
-        setStatus({ kind: "success", message: dict.resetEmailSent });
+        setStatus({ kind: "success", message: auth.resetEmailSent });
       }
       setEmail("");
     } catch {
-      setStatus({ kind: "success", message: dict.resetEmailSent });
+      setStatus({ kind: "success", message: auth.resetEmailSent });
     } finally {
       setPending(false);
     }
   }
 
   return (
-    <main className="ps-auth">
+<main className="ps-auth">
       <section className="ps-auth__card" aria-labelledby="forgot-title">
-        <AuthLockup title={dict.adminBrand} subtitle="PowerStats" />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 8,
+          }}
+        >
+          <AuthLockup title={auth.adminBrand} subtitle="PowerStats" />
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <ThemeToggle />
+            <LanguageSwitcher />
+          </div>
+        </div>
 
         <div className="ps-auth__heading">
-          <h1 id="forgot-title">{dict.forgotPasswordTitle}</h1>
+          <h1 id="forgot-title">{auth.forgotPasswordTitle}</h1>
         </div>
-        <p className="ps-auth__sub">{dict.forgotPasswordSubtitle}</p>
+        <p className="ps-auth__sub">{auth.forgotPasswordSubtitle}</p>
 
         <form onSubmit={handleSubmit} noValidate aria-describedby={statusId}>
           <div className="ps-field">
-            <label htmlFor={emailId}>{dict.email}</label>
+            <label htmlFor={emailId}>{auth.email}</label>
             <input
               id={emailId}
               type="email"
@@ -89,13 +105,13 @@ export default function ForgotPasswordPage() {
             />
           </div>
 
-          <button
+<button
             type="submit"
             className="ps-btn ps-form__submit"
             disabled={pending}
             aria-busy={pending}
           >
-            {dict.sendResetLink}
+            {auth.sendResetLink}
           </button>
 
           <div id={statusId} aria-live="polite" aria-atomic="true">
@@ -112,8 +128,8 @@ export default function ForgotPasswordPage() {
           </div>
         </form>
 
-        <Link className="ps-back" href="/admin/login">
-          ← {dict.backToLogin}
+<Link className="ps-back" href="/admin/login">
+          ← {auth.backToLogin}
         </Link>
       </section>
     </main>

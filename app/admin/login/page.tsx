@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useId, useRef, useState } from "react";
 
 import { AuthLockup } from "@/app/_components/AuthLockup";
-import { getDictionary, pickLocale } from "@/utils/i18n";
+import { LanguageSwitcher } from "@/app/_components/LanguageSwitcher";
+import { ThemeToggle } from "@/app/_components/ThemeToggle";
+import { useI18n } from "@/app/_components/I18nProvider";
 import { createClient } from "@/utils/supabase/client";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -24,14 +26,15 @@ export default function AdminLoginPage() {
 }
 
 function LoginSkeleton() {
-  const dict = getDictionary(pickLocale(undefined)).auth;
+  const { dict } = useI18n();
+  const auth = dict.auth;
   return (
     <main className="ps-auth">
       <section className="ps-auth__card" aria-busy="true">
-        <AuthLockup title={dict.adminBrand} subtitle="PowerStats" />
+<AuthLockup title={auth.adminBrand} subtitle="PowerStats" />
         <div className="ps-loading">
           <span className="ps-spinner" aria-hidden="true" />
-          <span>{dict.loadingSecureSession}</span>
+          <span>{auth.loadingSecureSession}</span>
         </div>
       </section>
     </main>
@@ -41,7 +44,8 @@ function LoginSkeleton() {
 function AdminLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const dict = getDictionary(pickLocale(undefined)).auth;
+  const { dict } = useI18n();
+  const auth = dict.auth;
 
   const emailId = useId();
   const passwordId = useId();
@@ -69,12 +73,12 @@ function AdminLoginForm() {
     if (pending) return;
 
     const trimmedEmail = email.trim();
-    if (!trimmedEmail || !EMAIL_PATTERN.test(trimmedEmail)) {
-      setStatus({ kind: "error", message: dict.emailRequired });
+if (!trimmedEmail || !EMAIL_PATTERN.test(trimmedEmail)) {
+      setStatus({ kind: "error", message: auth.emailRequired });
       return;
     }
     if (!password) {
-      setStatus({ kind: "error", message: dict.passwordRequired });
+      setStatus({ kind: "error", message: auth.passwordRequired });
       return;
     }
 
@@ -91,7 +95,7 @@ function AdminLoginForm() {
       if (error) {
         // Always return the same generic message to the UI — never echo
         // Supabase raw errors or confirm whether the email exists.
-        setStatus({ kind: "error", message: dict.loginFailed });
+setStatus({ kind: "error", message: auth.loginFailed });
         // Clear password after a failed attempt; keep email for convenience.
         setPassword("");
         if (passwordRef.current) passwordRef.current.value = "";
@@ -103,7 +107,7 @@ function AdminLoginForm() {
       router.replace("/admin");
       router.refresh();
     } catch {
-      setStatus({ kind: "error", message: dict.loginFailed });
+setStatus({ kind: "error", message: auth.loginFailed });
       setPassword("");
       if (passwordRef.current) passwordRef.current.value = "";
     } finally {
@@ -112,18 +116,31 @@ function AdminLoginForm() {
   }
 
   return (
-    <main className="ps-auth">
+<main className="ps-auth">
       <section className="ps-auth__card" aria-labelledby="login-title">
-        <AuthLockup title={dict.adminBrand} subtitle="PowerStats" />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 8,
+          }}
+        >
+          <AuthLockup title={auth.adminBrand} subtitle="PowerStats" />
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <ThemeToggle />
+            <LanguageSwitcher />
+          </div>
+        </div>
 
         <div className="ps-auth__heading">
-          <h1 id="login-title">{dict.adminAccess}</h1>
+          <h1 id="login-title">{auth.adminAccess}</h1>
         </div>
-        <p className="ps-auth__sub">{dict.signInSubtitle}</p>
+<p className="ps-auth__sub">{auth.signInSubtitle}</p>
 
         <form onSubmit={handleSubmit} noValidate aria-describedby={statusId}>
           <div className="ps-field">
-            <label htmlFor={emailId}>{dict.email}</label>
+            <label htmlFor={emailId}>{auth.email}</label>
             <input
               id={emailId}
               type="email"
@@ -140,7 +157,7 @@ function AdminLoginForm() {
           </div>
 
           <div className="ps-field">
-            <label htmlFor={passwordId}>{dict.password}</label>
+            <label htmlFor={passwordId}>{auth.password}</label>
             <div className="ps-field__control">
               <input
                 id={passwordId}
@@ -162,18 +179,18 @@ function AdminLoginForm() {
                 aria-pressed={showPassword}
                 aria-controls={passwordId}
                 aria-label={
-                  showPassword ? dict.hidePassword : dict.showPassword
+                  showPassword ? auth.hidePassword : auth.showPassword
                 }
                 disabled={pending}
               >
-                {showPassword ? dict.hidePassword : dict.showPassword}
+                {showPassword ? auth.hidePassword : auth.showPassword}
               </button>
             </div>
           </div>
 
           <div className="ps-form__row">
             <Link className="ps-link" href="/forgot-password">
-              {dict.forgotPassword}
+              {auth.forgotPassword}
             </Link>
           </div>
 
@@ -183,7 +200,7 @@ function AdminLoginForm() {
             disabled={pending}
             aria-busy={pending}
           >
-            {dict.enterAdminPortal}
+            {auth.enterAdminPortal}
           </button>
 
           <div id={statusId} aria-live="polite" aria-atomic="true">
@@ -200,8 +217,8 @@ function AdminLoginForm() {
           </div>
         </form>
 
-        <Link className="ps-back" href="/">
-          ← {dict.backToPowerStats}
+<Link className="ps-back" href="/">
+          ← {auth.backToPowerStats}
         </Link>
       </section>
     </main>

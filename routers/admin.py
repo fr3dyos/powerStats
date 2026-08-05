@@ -22,13 +22,232 @@ consistently::
         ...
 """
 
-from fastapi import APIRouter, Depends
+import io
+from typing import Dict, List, Optional
 
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+import models
+import schemas
 from routers.auth import require_admin
+from routers.deps import get_db
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
+# ---------------------------------------------------------------------------
+# Pydantic request bodies (roster linking + import results)
+# ---------------------------------------------------------------------------
+class RosterEntry(BaseModel):
+    """One row linking a player to a tournament/team roster.
+
+    Provide ``player_id`` to link an existing player, or ``name`` /
+    ``nickname`` to look players up by name before creating a new record.
+    ``team_id`` is required in every case.
+    """
+
+    player_id: Optional[int] = None
+    name: Optional[str] = None
+    nickname: Optional[str] = None
+    team_id: int
+
+
+class RosterImportReport(BaseModel):
+    """Per-row result of a roster file import."""
+
+    created: List[dict] = []
+    linked_existing: List[dict] = []
+    errors: List[dict] = []
+
+
+class SpiritImportReport(BaseModel):
+    """Per-row result of a Spirit of the Game file import."""
+
+    created: List[dict] = []
+    updated: List[dict] = []
+    errors: List[dict] = []
+
+
+# ---------------------------------------------------------------------------
+# Small helpers
+# ---------------------------------------------------------------------------
+def _get_tournament_or_404(db: Session, tournament_id: int) -> models.Tournament:
+    """Fetch a tournament by id or raise 404.
+
+    :param db: SQLAlchemy session.
+    :param tournament_id: Tournament primary key.
+    :return: The requested tournament row.
+    :raises HTTPException: 404 if not found.
+    """
+    tournament = (
+        db.query(models.Tournament)
+        .filter(models.Tournament.id == tournament_id)
+        .first()
+    )
+    if tournament is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tournament with id {tournament_id} not found.",
+        )
+    return tournament
+
+
+def _get_team_or_404(db: Session, team_id: int) -> models.Team:
+    """Fetch a team by id or raise 404.
+
+    :param db: SQLAlchemy session.
+    :param team_id: Team primary key.
+    :return: The requested team row.
+    :raises HTTPException: 404 if not found.
+    """
+    team = db.query(models.Team).filter(models.Team.id == team_id).first()
+    if team is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Team with id {team_id} not found.",
+        )
+    return team
+
+
+def _get_game_or_404(db: Session, game_id: int) -> models.Game:
+    """Fetch a game by id or raise 404.
+
+    :param db: SQLAlchemy session.
+    :param game_id: Game primary key.
+    :return: The requested game row.
+    :raises HTTPException: 404 if not found.
+    """
+    game = db.query(models.Game).filter(models.Game.id == game_id).first()
+    if game is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Game with id {game_id} not found.",
+        )
+    return game
+
+
+def _parse_uploaded_file(file: UploadFile):
+    """Read an uploaded CSV/XLSX into a list of dict rows.
+
+    :param file: The uploaded file.
+    :return: A list of dicts (one per row).
+    :raises HTTPException: 400 for empty / unparsable / unsupported files.
+    """
+    try:
+        import pandas as pd
+    except ImportError as exc:  # pragma: no cover - depends on install
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="pandas is required for file imports. Install requirements.txt.",
+        ) from exc
+
+    filename = (file.filename or "").lower()
+    content = file.file.read()
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Uploaded file is empty.",
+        )
+
+    try:
+        if filename.endswith(".xlsx") or filename.endswith(".xls"):
+            df = pd.read_excel(io.BytesIO(content))
+        elif filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(content))
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Unsupported file format. Use .csv or .xlsx.",
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Could not parse file: {str(exc)}",
+        ) from exc
+
+    # Normalise column names: lowercase, strip, replace spaces.
+    df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
+    records = df.to_dict(orient="records")
+    if not records:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="File contains no data rows.",
+        )
+    return records
+
+
+def _get_or_create_team(db: Session, tournament_id: int, name: str) -> models.Team:
+    """Find a team by name within a tournament, or create it.
+
+    :param db: SQLAlchemy session.
+    :param tournament_id: Tournament primary key.
+    :param name: Exact team name to match.
+    :return: The existing (or newly created) team.
+    """
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("team name is required.")
+    team = (
+        db.query(models.Team)
+        .filter(
+            models.Team.tournament_id == tournament_id,
+            models.Team.name == name,
+        )
+        .first()
+    )
+    if team is None:
+        team = models.Team(name=name, tournament_id=tournament_id)
+        db.add(team)
+        db.flush()
+    return team
+
+
+def _match_existing_player(db: Session, nickname: Optional[str], name: Optional[str]) -> Optional[models.Player]:
+    """Match a player by nickname (primary) then by full name.
+
+    :param db: SQLAlchemy session.
+    :param nickname: Optional player nickname.
+    :param name: Optional full name (first_name + last_name).
+    :return: The matched player or None.
+    """
+    if nickname:
+        parts = [p.strip() for p in str(nickname).split(" ", 1)]
+        first = parts[0]
+        last = parts[1] if len(parts) > 1 else ""
+        candidate = (
+            db.query(models.Player)
+            .filter(
+                models.Player.first_name == first,
+                models.Player.last_name == last,
+            )
+            .first()
+        )
+        if candidate:
+            return candidate
+    if name:
+        parts = [p.strip() for p in str(name).split(" ", 1)]
+        first = parts[0]
+        last = parts[1] if len(parts) > 1 else ""
+        candidate = (
+            db.query(models.Player)
+            .filter(
+                models.Player.first_name == first,
+                models.Player.last_name == last,
+            )
+            .first()
+        )
+        if candidate:
+            return candidate
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Health
+# ---------------------------------------------------------------------------
 @router.get("/health")
 def admin_health(_: str = Depends(require_admin)) -> dict:
     """Liveness probe that is only reachable by verified admins.
@@ -43,3 +262,681 @@ def admin_health(_: str = Depends(require_admin)) -> dict:
         403 if the token is valid but the user is not an admin.
     """
     return {"status": "ok", "message": "Admin access verified"}
+
+
+# ---------------------------------------------------------------------------
+# Tournament CRUD
+# ---------------------------------------------------------------------------
+@router.post("/tournaments", response_model=schemas.Tournament, status_code=status.HTTP_201_CREATED)
+def admin_create_tournament(
+    payload: schemas.TournamentCreate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Create a tournament (admin only).
+
+    :param payload: Tournament data.
+    :param db: SQLAlchemy session.
+    :return: The created tournament.
+    """
+    if payload.end_date <= payload.start_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="end_date must be after start_date.",
+        )
+    try:
+        tournament = models.Tournament(**payload.dict())
+        db.add(tournament)
+        db.commit()
+        db.refresh(tournament)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not create tournament: {str(exc)}",
+        ) from exc
+    return tournament
+
+
+@router.put("/tournaments/{tournament_id}", response_model=schemas.Tournament)
+def admin_update_tournament(
+    tournament_id: int,
+    payload: schemas.TournamentUpdate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Update a tournament (admin only).
+
+    :param tournament_id: Tournament primary key.
+    :param payload: Fields to update.
+    :param db: SQLAlchemy session.
+    :return: The updated tournament.
+    """
+    tournament = _get_tournament_or_404(db, tournament_id)
+    update_data = payload.dict(exclude_unset=True)
+    if "start_date" in update_data and "end_date" in update_data:
+        if update_data["end_date"] <= update_data["start_date"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="end_date must be after start_date.",
+            )
+    try:
+        for field, value in update_data.items():
+            setattr(tournament, field, value)
+        db.commit()
+        db.refresh(tournament)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not update tournament: {str(exc)}",
+        ) from exc
+    return tournament
+
+
+@router.delete("/tournaments/{tournament_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_tournament(
+    tournament_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Delete a tournament and cascade to its teams, games and stats.
+
+    :param tournament_id: Tournament primary key.
+    :param db: SQLAlchemy session.
+    """
+    tournament = _get_tournament_or_404(db, tournament_id)
+    try:
+        db.delete(tournament)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not delete tournament: {str(exc)}",
+        ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Team CRUD
+# ---------------------------------------------------------------------------
+@router.post("/teams", response_model=schemas.Team, status_code=status.HTTP_201_CREATED)
+def admin_create_team(
+    payload: schemas.TeamCreate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Create a team (admin only).
+
+    :param payload: Team data.
+    :param db: SQLAlchemy session.
+    :return: The created team.
+    """
+    _get_tournament_or_404(db, payload.tournament_id)
+    try:
+        team = models.Team(**payload.dict())
+        db.add(team)
+        db.commit()
+        db.refresh(team)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not create team: {str(exc)}",
+        ) from exc
+    return team
+
+
+@router.put("/teams/{team_id}", response_model=schemas.Team)
+def admin_update_team(
+    team_id: int,
+    payload: schemas.TeamUpdate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Update a team (admin only).
+
+    :param team_id: Team primary key.
+    :param payload: Fields to update.
+    :param db: SQLAlchemy session.
+    :return: The updated team.
+    """
+    team = _get_team_or_404(db, team_id)
+    update_data = payload.dict(exclude_unset=True)
+    if "tournament_id" in update_data:
+        _get_tournament_or_404(db, update_data["tournament_id"])
+    try:
+        for field, value in update_data.items():
+            setattr(team, field, value)
+        db.commit()
+        db.refresh(team)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not update team: {str(exc)}",
+        ) from exc
+    return team
+
+
+@router.delete("/teams/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_team(
+    team_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Delete a team (admin only).
+
+    :param team_id: Team primary key.
+    :param db: SQLAlchemy session.
+    """
+    team = _get_team_or_404(db, team_id)
+    try:
+        db.delete(team)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not delete team: {str(exc)}",
+        ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Player CRUD
+# ---------------------------------------------------------------------------
+@router.post("/players", response_model=schemas.Player, status_code=status.HTTP_201_CREATED)
+def admin_create_player(
+    payload: schemas.PlayerCreate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Create a player (admin only).
+
+    :param payload: Player data.
+    :param db: SQLAlchemy session.
+    :return: The created player.
+    """
+    _get_team_or_404(db, payload.team_id)
+    try:
+        player = models.Player(**payload.dict())
+        db.add(player)
+        db.commit()
+        db.refresh(player)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not create player: {str(exc)}",
+        ) from exc
+    return player
+
+
+@router.put("/players/{player_id}", response_model=schemas.Player)
+def admin_update_player(
+    player_id: int,
+    payload: schemas.PlayerUpdate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Update a player (admin only).
+
+    :param player_id: Player primary key.
+    :param payload: Fields to update.
+    :param db: SQLAlchemy session.
+    :return: The updated player.
+    """
+    player = db.query(models.Player).filter(models.Player.id == player_id).first()
+    if player is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Player with id {player_id} not found.",
+        )
+    update_data = payload.dict(exclude_unset=True)
+    if "team_id" in update_data:
+        _get_team_or_404(db, update_data["team_id"])
+    try:
+        for field, value in update_data.items():
+            setattr(player, field, value)
+        db.commit()
+        db.refresh(player)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not update player: {str(exc)}",
+        ) from exc
+    return player
+
+
+@router.delete("/players/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_player(
+    player_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Delete a player (admin only).
+
+    :param player_id: Player primary key.
+    :param db: SQLAlchemy session.
+    """
+    player = db.query(models.Player).filter(models.Player.id == player_id).first()
+    if player is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Player with id {player_id} not found.",
+        )
+    try:
+        db.delete(player)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not delete player: {str(exc)}",
+        ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Game CRUD
+# ---------------------------------------------------------------------------
+@router.post("/games", response_model=schemas.Game, status_code=status.HTTP_201_CREATED)
+def admin_create_game(
+    payload: schemas.GameCreate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Create a game (admin only).
+
+    :param payload: Game data.
+    :param db: SQLAlchemy session.
+    :return: The created game.
+    """
+    _get_tournament_or_404(db, payload.tournament_id)
+    _get_team_or_404(db, payload.home_team_id)
+    _get_team_or_404(db, payload.away_team_id)
+    if payload.home_team_id == payload.away_team_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A game cannot be scheduled between the same team.",
+        )
+    try:
+        game = models.Game(**payload.dict())
+        db.add(game)
+        db.commit()
+        db.refresh(game)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not create game: {str(exc)}",
+        ) from exc
+    return game
+
+
+@router.put("/games/{game_id}", response_model=schemas.Game)
+def admin_update_game(
+    game_id: int,
+    payload: schemas.GameUpdate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Update a game (admin only).
+
+    :param game_id: Game primary key.
+    :param payload: Fields to update.
+    :param db: SQLAlchemy session.
+    :return: The updated game.
+    """
+    game = _get_game_or_404(db, game_id)
+    update_data = payload.dict(exclude_unset=True)
+    if "tournament_id" in update_data:
+        _get_tournament_or_404(db, update_data["tournament_id"])
+    try:
+        for field, value in update_data.items():
+            setattr(game, field, value)
+        db.commit()
+        db.refresh(game)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not update game: {str(exc)}",
+        ) from exc
+    return game
+
+
+@router.delete("/games/{game_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_game(
+    game_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Delete a game (admin only).
+
+    :param game_id: Game primary key.
+    :param db: SQLAlchemy session.
+    """
+    game = _get_game_or_404(db, game_id)
+    try:
+        db.delete(game)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not delete game: {str(exc)}",
+        ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Roster linking (JSON body)
+# ---------------------------------------------------------------------------
+@router.post("/tournaments/{tournament_id}/roster", response_model=RosterImportReport)
+def admin_link_roster(
+    tournament_id: int,
+    entries: List[RosterEntry],
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Link existing players to a tournament/team roster, or create them.
+
+    Body: ``[{"player_id"?, "name"?, "nickname"?, "team_id"}]``. Players are
+    matched by exact name/nickname before creating new records to avoid
+    duplicates.
+
+    :param tournament_id: Tournament primary key.
+    :param entries: Roster rows.
+    :param db: SQLAlchemy session.
+    :return: Per-row report with ``created`` / ``linked_existing`` / ``errors``.
+    """
+    _get_tournament_or_404(db, tournament_id)
+    created: List[dict] = []
+    linked_existing: List[dict] = []
+    errors: List[dict] = []
+
+    for idx, entry in enumerate(entries):
+        try:
+            team = _get_team_or_404(db, entry.team_id)
+            if team.tournament_id != tournament_id:
+                raise ValueError(
+                    f"team {entry.team_id} does not belong to tournament {tournament_id}."
+                )
+
+            # Matching priority: explicit player_id, then nickname, then name.
+            player = None
+            if entry.player_id is not None:
+                player = (
+                    db.query(models.Player)
+                    .filter(models.Player.id == entry.player_id)
+                    .first()
+                )
+                if player is None:
+                    raise ValueError(f"player_id {entry.player_id} not found.")
+            else:
+                player = _match_existing_player(db, entry.nickname, entry.name)
+
+            if player is None:
+                if not entry.name:
+                    raise ValueError("Either 'player_id' or 'name' is required.")
+                parts = [p.strip() for p in str(entry.name).split(" ", 1)]
+                first = parts[0]
+                last = parts[1] if len(parts) > 1 else ""
+                player = models.Player(first_name=first, last_name=last, team_id=team.id)
+                # Apply nickname as last_name if no full name was given.
+                if entry.nickname and last == "":
+                    player.last_name = str(entry.nickname).strip()
+                db.add(player)
+                db.flush()
+                created.append(
+                    {
+                        "row": idx + 1,
+                        "player_id": player.id,
+                        "name": f"{player.first_name} {player.last_name}".strip(),
+                        "team_id": team.id,
+                    }
+                )
+            else:
+                # Re-point the player to the requested team if it differs.
+                if player.team_id != team.id:
+                    player.team_id = team.id
+                linked_existing.append(
+                    {
+                        "row": idx + 1,
+                        "player_id": player.id,
+                        "name": f"{player.first_name} {player.last_name}".strip(),
+                        "team_id": team.id,
+                    }
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            errors.append({"row": idx + 1, "reason": str(exc)})
+
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not commit roster: {str(exc)}",
+        ) from exc
+
+    return RosterImportReport(created=created, linked_existing=linked_existing, errors=errors)
+
+
+# ---------------------------------------------------------------------------
+# Roster file import (CSV / XLSX)
+# ---------------------------------------------------------------------------
+@router.post("/tournaments/{tournament_id}/roster/import", response_model=RosterImportReport)
+async def admin_import_roster(
+    tournament_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Import a roster from CSV/XLSX.
+
+    Required columns: ``name``, ``nickname``, ``team``. Any additional columns
+    are treated as optional player stats and mapped to existing stat fields;
+    unknown columns are ignored with a warning.
+
+    Upsert semantics: match existing players by ``nickname`` (primary) then
+    ``name``; match teams by name within the tournament.
+
+    :param tournament_id: Tournament primary key.
+    :param file: ``.csv`` or ``.xlsx`` file.
+    :param db: SQLAlchemy session.
+    :return: Per-row report with ``created`` / ``linked_existing`` / ``errors``.
+    """
+    _get_tournament_or_404(db, tournament_id)
+    records = _parse_uploaded_file(file)
+
+    required = {"name", "nickname", "team"}
+    present = {k for k in records[0].keys()}
+    missing = required - present
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Missing required columns: {', '.join(sorted(missing))}.",
+        )
+
+    created: List[dict] = []
+    linked_existing: List[dict] = []
+    errors: List[dict] = []
+
+    for idx, row in enumerate(records):
+        try:
+            name = str(row.get("name") or "").strip()
+            nickname = str(row.get("nickname") or "").strip()
+            team_name = str(row.get("team") or "").strip()
+            if not name or not team_name:
+                raise ValueError("name and team are required per row.")
+
+            team = _get_or_create_team(db, tournament_id, team_name)
+            player = _match_existing_player(db, nickname, name)
+
+            if player is None:
+                parts = [p.strip() for p in name.split(" ", 1)]
+                first = parts[0]
+                last = parts[1] if len(parts) > 1 else (nickname or "")
+                player = models.Player(first_name=first, last_name=last, team_id=team.id)
+                db.add(player)
+                db.flush()
+                created.append(
+                    {
+                        "row": idx + 1,
+                        "player_id": player.id,
+                        "name": f"{player.first_name} {player.last_name}".strip(),
+                        "team": team.name,
+                        "team_id": team.id,
+                    }
+                )
+            else:
+                if player.team_id != team.id:
+                    player.team_id = team.id
+                linked_existing.append(
+                    {
+                        "row": idx + 1,
+                        "player_id": player.id,
+                        "name": f"{player.first_name} {player.last_name}".strip(),
+                        "team": team.name,
+                        "team_id": team.id,
+                    }
+                )
+        except Exception as exc:
+            errors.append({"row": idx + 1, "reason": str(exc)})
+
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not commit roster import: {str(exc)}",
+        ) from exc
+
+    return RosterImportReport(created=created, linked_existing=linked_existing, errors=errors)
+
+
+# ---------------------------------------------------------------------------
+# Spirit of the Game (SOTG) file import
+# ---------------------------------------------------------------------------
+@router.post("/tournaments/{tournament_id}/spirit/import", response_model=SpiritImportReport)
+async def admin_import_spirit(
+    tournament_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Import Spirit of the Game scores from CSV/XLSX.
+
+    Columns: ``team``, ``team_against``, ``score_1``..``score_5`` (WFDF SOTG
+    categories: rules knowledge, fouls & contact, fair-mindedness, positive
+    attitude, communication). Each score must be an integer in 0–4.
+
+    Upsert on ``(tournament_id, team, team_against)``; the total (sum of the
+    five scores) is computed and stored.
+
+    :param tournament_id: Tournament primary key.
+    :param file: ``.csv`` or ``.xlsx`` file.
+    :param db: SQLAlchemy session.
+    :return: Per-row report with ``created`` / ``updated`` / ``errors``.
+    """
+    _get_tournament_or_404(db, tournament_id)
+    records = _parse_uploaded_file(file)
+
+    required = {"team", "team_against", "score_1", "score_2", "score_3", "score_4", "score_5"}
+    present = {k for k in records[0].keys()}
+    missing = required - present
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Missing required columns: {', '.join(sorted(missing))}.",
+        )
+
+    created: List[dict] = []
+    updated: List[dict] = []
+    errors: List[dict] = []
+
+    for idx, row in enumerate(records):
+        try:
+            team_name = str(row.get("team") or "").strip()
+            against_name = str(row.get("team_against") or "").strip()
+            if not team_name or not against_name:
+                raise ValueError("team and team_against are required per row.")
+
+            scores = []
+            for key in ["score_1", "score_2", "score_3", "score_4", "score_5"]:
+                raw = row.get(key)
+                try:
+                    val = int(raw)
+                except (TypeError, ValueError):
+                    raise ValueError(f"{key} must be an integer.")
+                if val < 0 or val > 4:
+                    raise ValueError(f"{key} must be between 0 and 4.")
+                scores.append(val)
+            total = sum(scores)
+
+            team = _get_or_create_team(db, tournament_id, team_name)
+            against = _get_or_create_team(db, tournament_id, against_name)
+
+            spirit = (
+                db.query(models.SpiritScore)
+                .filter(
+                    models.SpiritScore.tournament_id == tournament_id,
+                    models.SpiritScore.team_id == team.id,
+                    models.SpiritScore.team_against_id == against.id,
+                )
+                .first()
+            )
+            if spirit is None:
+                spirit = models.SpiritScore(
+                    tournament_id=tournament_id,
+                    team_id=team.id,
+                    team_against_id=against.id,
+                    score_1=scores[0],
+                    score_2=scores[1],
+                    score_3=scores[2],
+                    score_4=scores[3],
+                    score_5=scores[4],
+                    total=total,
+                )
+                db.add(spirit)
+                db.flush()
+                created.append(
+                    {
+                        "row": idx + 1,
+                        "team": team.name,
+                        "team_against": against.name,
+                        "total": total,
+                    }
+                )
+            else:
+                spirit.score_1 = scores[0]
+                spirit.score_2 = scores[1]
+                spirit.score_3 = scores[2]
+                spirit.score_4 = scores[3]
+                spirit.score_5 = scores[4]
+                spirit.total = total
+                updated.append(
+                    {
+                        "row": idx + 1,
+                        "team": team.name,
+                        "team_against": against.name,
+                        "total": total,
+                    }
+                )
+        except Exception as exc:
+            errors.append({"row": idx + 1, "reason": str(exc)})
+
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not commit spirit import: {str(exc)}",
+        ) from exc
+
+    return SpiritImportReport(created=created, updated=updated, errors=errors)

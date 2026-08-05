@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum as PyEnum
@@ -322,6 +322,13 @@ class GameEventBase(BaseModel):
     points: int = Field(0, ge=0)
     time_elapsed: Optional[int] = Field(None, ge=0)  # in seconds from start of game
     period: Optional[int] = Field(None, ge=1, le=2)  # 1 for first half, 2 for second half
+
+    @validator("time_elapsed", pre=True, always=True)
+    def clamp_negative_elapsed(cls, v):
+        # Legacy rows may store negative elapsed time; clamp instead of 500.
+        if v is None:
+            return None
+        return max(v or 0, 0)
 
 class GameEventCreate(GameEventBase):
     pass

@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 
 import { AuthLockup } from "@/app/_components/AuthLockup";
-import { getDictionary, pickLocale } from "@/utils/i18n";
+import { LanguageSwitcher } from "@/app/_components/LanguageSwitcher";
+import { ThemeToggle } from "@/app/_components/ThemeToggle";
+import { useI18n } from "@/app/_components/I18nProvider";
 import { createClient } from "@/utils/supabase/client";
 
 const MIN_PASSWORD_LENGTH = 12;
@@ -17,7 +19,8 @@ type Status =
 
 export default function ResetPasswordPage() {
   const router = useRouter();
-  const dict = getDictionary(pickLocale(undefined)).auth;
+  const { dict } = useI18n();
+  const auth = dict.auth;
 
   const newPasswordId = useId();
   const confirmId = useId();
@@ -54,12 +57,12 @@ export default function ResetPasswordPage() {
     event.preventDefault();
     if (pending) return;
 
-    if (newPassword.length < MIN_PASSWORD_LENGTH) {
-      setStatus({ kind: "error", message: dict.passwordTooShort });
+if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      setStatus({ kind: "error", message: auth.passwordTooShort });
       return;
     }
     if (newPassword !== confirmPassword) {
-      setStatus({ kind: "error", message: dict.passwordsDoNotMatch });
+      setStatus({ kind: "error", message: auth.passwordsDoNotMatch });
       return;
     }
 
@@ -72,8 +75,8 @@ export default function ResetPasswordPage() {
         password: newPassword,
       });
 
-      if (error) {
-        setStatus({ kind: "error", message: dict.loginFailed });
+if (error) {
+        setStatus({ kind: "error", message: auth.loginFailed });
         return;
       }
 
@@ -81,32 +84,45 @@ export default function ResetPasswordPage() {
       // is replaced with a fresh signed-out session at the login page.
       setNewPassword("");
       setConfirmPassword("");
-      setStatus({ kind: "success", message: dict.passwordUpdated });
+setStatus({ kind: "success", message: auth.passwordUpdated });
 
       // Brief pause so the user perceives confirmation, then navigate.
       setTimeout(() => {
         router.replace("/admin/login?message=password-updated");
       }, 400);
     } catch {
-      setStatus({ kind: "error", message: dict.loginFailed });
+setStatus({ kind: "error", message: auth.loginFailed });
     } finally {
       setPending(false);
     }
   }
 
   return (
-    <main className="ps-auth">
+<main className="ps-auth">
       <section className="ps-auth__card" aria-labelledby="reset-title">
-        <AuthLockup title={dict.adminBrand} subtitle="PowerStats" />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 8,
+          }}
+        >
+          <AuthLockup title={auth.adminBrand} subtitle="PowerStats" />
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <ThemeToggle />
+            <LanguageSwitcher />
+          </div>
+        </div>
 
         <div className="ps-auth__heading">
-          <h1 id="reset-title">{dict.resetPasswordTitle}</h1>
+          <h1 id="reset-title">{auth.resetPasswordTitle}</h1>
         </div>
-        <p className="ps-auth__sub">{dict.resetPasswordSubtitle}</p>
+        <p className="ps-auth__sub">{auth.resetPasswordSubtitle}</p>
 
         <form onSubmit={handleSubmit} noValidate aria-describedby={statusId}>
           <div className="ps-field">
-            <label htmlFor={newPasswordId}>{dict.newPassword}</label>
+            <label htmlFor={newPasswordId}>{auth.newPassword}</label>
             <div className="ps-field__control">
               <input
                 id={newPasswordId}
@@ -127,18 +143,18 @@ export default function ResetPasswordPage() {
                 onClick={() => setShowPassword((prev) => !prev)}
                 aria-pressed={showPassword}
                 aria-controls={newPasswordId}
-                aria-label={
-                  showPassword ? dict.hidePassword : dict.showPassword
+aria-label={
+                  showPassword ? auth.hidePassword : auth.showPassword
                 }
                 disabled={pending}
               >
-                {showPassword ? dict.hidePassword : dict.showPassword}
+                {showPassword ? auth.hidePassword : auth.showPassword}
               </button>
             </div>
           </div>
 
-          <div className="ps-field">
-            <label htmlFor={confirmId}>{dict.confirmNewPassword}</label>
+<div className="ps-field">
+            <label htmlFor={confirmId}>{auth.confirmNewPassword}</label>
             <input
               id={confirmId}
               type={showPassword ? "text" : "password"}
@@ -154,13 +170,13 @@ export default function ResetPasswordPage() {
             />
           </div>
 
-          <button
+<button
             type="submit"
             className="ps-btn ps-form__submit"
             disabled={pending}
             aria-busy={pending}
           >
-            {dict.updatePassword}
+            {auth.updatePassword}
           </button>
 
           <div id={statusId} aria-live="polite" aria-atomic="true">
@@ -177,8 +193,8 @@ export default function ResetPasswordPage() {
           </div>
         </form>
 
-        <Link className="ps-back" href="/admin/login">
-          ← {dict.backToLogin}
+<Link className="ps-back" href="/admin/login">
+          ← {auth.backToLogin}
         </Link>
       </section>
     </main>

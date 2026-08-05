@@ -29,9 +29,12 @@ export default async function TournamentPublicStatsPage({
 }: {
   params: Promise<Params>;
 }) {
-  const { dict } = await getServerLocale();
+const { dict } = await getServerLocale();
   const common = dict.common;
   const pub = dict.publicStats;
+  const trn = dict.tournament;
+  const team = dict.team;
+  const pl = dict.player;
   const nav = dict.navigation;
 
   const { id: rawId } = await params;
@@ -92,19 +95,19 @@ export default async function TournamentPublicStatsPage({
   const completed = games.filter((g) => g.is_completed).length;
 
   return (
-    <AppShell
-      brandSubtitle={`${tournament.name} · Stats`}
+<AppShell
+      brandSubtitle={`${tournament.name} · ${pub.title}`}
       footerText={common.footer}
       authLinks={[
-        { label: "← Tournament hub", href: `/tournaments/${id}`, variant: "ghost" },
+        { label: common.backToTournament, href: `/tournaments/${id}`, variant: "ghost" },
         { label: nav.rankings, href: "/rankings", variant: "ghost" },
       ]}
     >
       <section className="ps-admin">
         <div className="ps-section">
-          <span className="ps-section__eyebrow">{pub.publicStatsTitle}</span>
-          <h1>{pub.title}</h1>
-          <p>{pub.subtitle}</p>
+          <span className="ps-section__eyebrow">{trn.publicStats}</span>
+          <h1>{trn.playerStatsTitle}</h1>
+          <p>{trn.playerStatsSubtitle}</p>
         </div>
 
         <div
@@ -115,9 +118,9 @@ export default async function TournamentPublicStatsPage({
             marginBottom: 24,
           }}
         >
-          <div className="ps-stat-tile">
+<div className="ps-stat-tile">
             <span className="ps-stat-tile__value">{totalGoals}</span>
-            <span className="ps-stat-tile__label">{pub.goalsScored}</span>
+            <span className="ps-stat-tile__label">{common.goals}</span>
           </div>
           <div className="ps-stat-tile">
             <span className="ps-stat-tile__value">{teams.length}</span>
@@ -143,34 +146,34 @@ export default async function TournamentPublicStatsPage({
               gap: 16,
             }}
           >
-            <Leaderboard
-              title={pub.topScorers}
+<Leaderboard
+              title={team.topScorers}
               rows={goalLeaders}
               valueSuffix={pub.goals}
             />
             <Leaderboard
-              title={pub.topAssists}
+              title={team.topAssists}
               rows={assistLeaders}
               valueSuffix={pub.assists}
             />
             <Leaderboard
-              title={pub.topDefenses}
+              title={team.topDefenses}
               rows={defenseLeaders}
               valueSuffix={pub.defenses}
             />
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div className="ps-card">
-              <span className="ps-section__eyebrow">{pub.spiritOfTheGame}</span>
-              <h3 style={{ marginTop: 4 }}>{pub.sotgStandings}</h3>
+<div className="ps-card">
+              <span className="ps-section__eyebrow">{pl.spiritOfTheGame}</span>
+              <h3 style={{ marginTop: 4 }}>{pl.spiritOfTheGame}</h3>
               <p style={{ color: "var(--ps-text-muted)", fontSize: 13 }}>
-                {pub.sotgNotCollected}
+                {pl.noSotg}
               </p>
             </div>
             <div className="ps-card">
-              <span className="ps-section__eyebrow">{pub.topTeams}</span>
-              <h3 style={{ marginTop: 4 }}>{pub.byGoalsScored}</h3>
+              <span className="ps-section__eyebrow">{team.topScorers}</span>
+              <h3 style={{ marginTop: 4 }}>{team.byGoalsScored}</h3>
               <ol
                 style={{
                   paddingLeft: 0,

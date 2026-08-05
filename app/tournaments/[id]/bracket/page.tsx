@@ -98,11 +98,11 @@ export default async function TournamentBracketPage({
   const rounds = groupRounds(bracketGames, teamMap);
 
   return (
-    <AppShell
-      brandSubtitle={`${tournament.name} · Bracket`}
+<AppShell
+      brandSubtitle={`${tournament.name} · ${brk.title}`}
       footerText={common.footer}
       authLinks={[
-        { label: "← Tournament hub", href: `/tournaments/${id}`, variant: "ghost" },
+        { label: common.backToTournament, href: `/tournaments/${id}`, variant: "ghost" },
         { label: nav.rankings, href: "/rankings", variant: "ghost" },
       ]}
     >

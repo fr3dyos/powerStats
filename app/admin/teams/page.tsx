@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/AppShell";
 import { SignOutButton } from "@/app/_components/SignOutButton";
 import { getAuthedUser } from "@/utils/supabase/server";
-import { getDictionary, pickLocale } from "@/utils/i18n";
+import { getServerLocale } from "@/utils/i18n-server";
 import {
   teamsApi,
   tournamentsApi,
@@ -28,9 +28,11 @@ export default async function AdminTeamsPage() {
     redirect("/?error=unauthorized");
   }
 
-  const dict = getDictionary(pickLocale(undefined));
+const { dict } = await getServerLocale();
   const auth = dict.auth;
   const dashboard = dict.adminDashboard;
+  const at = dict.adminTeams;
+  const nav = dict.navigation;
 
   // Gather every tournament and its teams so the admin can browse the full
   // team directory across events.
@@ -49,31 +51,33 @@ export default async function AdminTeamsPage() {
   return (
     <AppShell
       brandSubtitle={auth.adminBrand}
-      authLinks={[
-        { label: "Dashboard", href: "/admin", variant: "ghost" },
-        { label: "Players", href: "/admin/players", variant: "ghost" },
-        { label: "Tournaments", href: "/tournaments", variant: "ghost" },
+authLinks={[
+        { label: dashboard.title, href: "/admin", variant: "ghost" },
+        { label: nav.players, href: "/admin/players", variant: "ghost" },
+        { label: nav.tournaments, href: "/tournaments", variant: "ghost" },
       ]}
     >
       <section className="ps-admin">
         <header className="ps-admin__header">
           <div className="ps-admin__title">
-            <h1>Teams</h1>
+            <h1>{at.title}</h1>
             <span className="ps-status-pill" aria-live="polite">
-              {totalTeams} teams across {tournaments.length} tournaments
+              {at.summary
+                .replace("{total}", String(totalTeams))
+                .replace("{count}", String(tournaments.length))}
             </span>
           </div>
           <SignOutButton label={auth.signOut} />
         </header>
 
         <p className="ps-admin__subtitle">
-          {dashboard.teamsCopy} Full team directory across every tournament.
+          {dashboard.teamsCopy} {at.title.toLowerCase()} directory.
         </p>
 
         {perTournament.length === 0 ? (
           <div className="ps-card">
-            <h3>No tournaments yet</h3>
-            <p>Create a tournament first to start registering teams.</p>
+            <h3>{at.emptyTitle}</h3>
+            <p>{at.emptyCopy}</p>
           </div>
         ) : (
           <div
@@ -94,12 +98,14 @@ export default async function AdminTeamsPage() {
                     marginBottom: 12,
                   }}
                 >
-                  <h3 style={{ fontSize: 16 }}>{tournament.name}</h3>
-                  <span className="ps-pill">{tlist.length} teams</span>
+<h3 style={{ fontSize: 16 }}>{tournament.name}</h3>
+                  <span className="ps-pill">
+                    {at.teamCount.replace("{count}", String(tlist.length))}
+                  </span>
                 </header>
                 {tlist.length === 0 ? (
                   <p style={{ color: "var(--ps-text-muted)", fontSize: 13 }}>
-                    No teams registered yet.
+                    {at.noTeams}
                   </p>
                 ) : (
                   <ul

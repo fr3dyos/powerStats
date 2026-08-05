@@ -9,7 +9,7 @@ import {
 } from "@/utils/api";
 import { getServerLocale } from "@/utils/i18n-server";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export default async function TournamentsListPage() {
   const { dict } = await getServerLocale();

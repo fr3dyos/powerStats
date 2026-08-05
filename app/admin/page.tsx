@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { AppShell } from "@/app/_components/AppShell";
 import { SignOutButton } from "@/app/_components/SignOutButton";
-import { getDictionary, pickLocale } from "@/utils/i18n";
+import { getServerLocale } from "@/utils/i18n-server";
 import { getAuthedUser } from "@/utils/supabase/server";
 import { gamesApi, tournamentsApi } from "@/utils/api";
 
@@ -36,7 +36,7 @@ export default async function AdminDashboardPage() {
     redirect("/?error=unauthorized");
   }
 
-  const dict = getDictionary(pickLocale(undefined));
+const { dict } = await getServerLocale();
   const dashboard = dict.adminDashboard;
   const auth = dict.auth;
 

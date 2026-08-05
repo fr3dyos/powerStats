@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/app/_components/AppShell";
+import { getServerLocale } from "@/utils/i18n-server";
 import {
   formatPlayerName,
   playersApi,
@@ -93,6 +94,10 @@ export default async function PlayerProfilePage({
   ]);
   if (!player) notFound();
 
+  const { dict } = await getServerLocale();
+  const p = dict.player;
+  const c = dict.common;
+
   const team = await teamsApi.get(player.team_id).catch(() => null);
   const accent = teamColor(team?.name);
 
@@ -113,11 +118,11 @@ export default async function PlayerProfilePage({
   };
 
   return (
-    <AppShell
-      brandSubtitle={`${formatPlayerName(player)} · Profile`}
-      authLinks={[
-        { label: "← Team profile", href: `/teams/${player.team_id}`, variant: "ghost" },
-        { label: "Rankings", href: "/rankings", variant: "ghost" },
+<AppShell
+      brandSubtitle={`${formatPlayerName(player)} · ${p.profile}`}
+authLinks={[
+        { label: p.backToTeam ?? p.profile, href: `/teams/${player.team_id}`, variant: "ghost" },
+{ label: dict.navigation.rankings, href: "/rankings", variant: "ghost" },
       ]}
     >
       <section className="ps-admin">
@@ -141,13 +146,15 @@ export default async function PlayerProfilePage({
             {player.jersey_number ?? "?"}
           </span>
           <div>
-            <span className="ps-section__eyebrow">
-              {team?.name ?? "Player"} · #{player.jersey_number ?? "—"}
+<span className="ps-section__eyebrow">
+              {team?.name ?? p.title} · #{player.jersey_number ?? "—"}
             </span>
             <h1 style={{ marginTop: 4 }}>{formatPlayerName(player)}</h1>
-            <p style={{ color: "var(--ps-text-muted)", marginTop: 4 }}>
-              {totals.games_played} games played across {perTournament.length}{" "}
-              {perTournament.length === 1 ? "tournament" : "tournaments"}
+<p style={{ color: "var(--ps-text-muted)", marginTop: 4 }}>
+              {p.gamesPlayedAcross.replace("{games}", String(totals.games_played)).replace(
+                "{tournaments}",
+                String(perTournament.length),
+              )}
             </p>
           </div>
         </div>
@@ -163,23 +170,23 @@ export default async function PlayerProfilePage({
                 alignItems: "center",
               }}
             >
-              <div className="ps-stat-tile">
+<div className="ps-stat-tile">
                 <span className="ps-stat-tile__value">{totals.goals}</span>
-                <span className="ps-stat-tile__label">Goals</span>
+                <span className="ps-stat-tile__label">{p.goals}</span>
               </div>
               <div className="ps-stat-tile">
                 <span className="ps-stat-tile__value">{totals.assists}</span>
-                <span className="ps-stat-tile__label">Assists</span>
+                <span className="ps-stat-tile__label">{p.assists}</span>
               </div>
               <div className="ps-stat-tile">
                 <span className="ps-stat-tile__value">{totals.defenses}</span>
-                <span className="ps-stat-tile__label">Defenses</span>
+                <span className="ps-stat-tile__label">{p.defenses}</span>
               </div>
               <div className="ps-stat-tile">
                 <span className="ps-stat-tile__value ps-stat-tile__value--accent">
                   {totals.games_played}
                 </span>
-                <span className="ps-stat-tile__label">Games</span>
+                <span className="ps-stat-tile__label">{p.games}</span>
               </div>
             </div>
 
@@ -193,13 +200,13 @@ export default async function PlayerProfilePage({
                     marginBottom: 12,
                   }}
                 >
-                  <h2 style={{ fontSize: 18 }}>Latest tournament</h2>
+<h2 style={{ fontSize: 18 }}>{p.latestTournament}</h2>
                   <Link
                     href={`/tournaments/${head.tournament_id}`}
                     className="ps-pill"
                     style={{ textDecoration: "none" }}
                   >
-                    {head.tournament_name ?? "Tournament"} →
+                    {head.tournament_name ?? c.tournament} →
                   </Link>
                 </header>
                 <div
@@ -218,11 +225,11 @@ export default async function PlayerProfilePage({
                       gap: 8,
                     }}
                   >
-                    <ProgressRing
+<ProgressRing
                       value={goalsPerGame}
                       max={Math.max(goalsPerGame, 1.5)}
                       color="lime"
-                      label="Goals / game"
+                      label={p.goalsPerGame}
                     />
                   </div>
                   <div
@@ -233,11 +240,11 @@ export default async function PlayerProfilePage({
                       gap: 8,
                     }}
                   >
-                    <ProgressRing
+<ProgressRing
                       value={assistsPerGame}
                       max={Math.max(assistsPerGame, 2)}
                       color="teal"
-                      label="Assists / game"
+                      label={p.assistsPerGame}
                     />
                   </div>
                   <div
@@ -248,11 +255,11 @@ export default async function PlayerProfilePage({
                       gap: 8,
                     }}
                   >
-                    <ProgressRing
+<ProgressRing
                       value={defensesPerGame}
                       max={Math.max(defensesPerGame, 1.2)}
                       color="orange"
-                      label="Defenses / game"
+                      label={p.defensesPerGame}
                     />
                   </div>
                 </div>
@@ -266,21 +273,21 @@ export default async function PlayerProfilePage({
                   borderBottom: "1px solid var(--ps-border)",
                 }}
               >
-                <h2 style={{ fontSize: 18 }}>Tournament history</h2>
+<h2 style={{ fontSize: 18 }}>{p.tournamentHistory}</h2>
               </header>
               {perTournament.length === 0 ? (
                 <p style={{ color: "var(--ps-text-muted)", padding: 16, fontSize: 13 }}>
-                  No tournament stats yet.
+                  {p.noTournamentStats}
                 </p>
               ) : (
                 <table className="ps-table">
                   <thead>
                     <tr>
-                      <th>Tournament</th>
-                      <th style={{ textAlign: "right" }}>G</th>
-                      <th style={{ textAlign: "right" }}>A</th>
-                      <th style={{ textAlign: "right" }}>D</th>
-                      <th style={{ textAlign: "right" }}>GP</th>
+                      <th>{c.tournament}</th>
+                      <th style={{ textAlign: "right" }}>{p.goals}</th>
+                      <th style={{ textAlign: "right" }}>{p.assists}</th>
+                      <th style={{ textAlign: "right" }}>{p.defenses}</th>
+                      <th style={{ textAlign: "right" }}>{c.gamesPlayedShort}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -291,7 +298,7 @@ export default async function PlayerProfilePage({
                             href={`/tournaments/${row.tournament_id}`}
                             style={{ color: "var(--ps-text)" }}
                           >
-                            {row.tournament_name ?? `Tournament #${row.tournament_id}`}
+{row.tournament_name ?? `${c.tournament} #${row.tournament_id}`}
                           </Link>
                         </td>
                         <td className="ps-table__num" style={{ textAlign: "right" }}>
@@ -315,8 +322,8 @@ export default async function PlayerProfilePage({
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div className="ps-card">
-              <span className="ps-section__eyebrow">Player card</span>
+<div className="ps-card">
+              <span className="ps-section__eyebrow">{p.playerCard}</span>
               <h3 style={{ marginTop: 4 }}>{formatPlayerName(player)}</h3>
               <ul
                 style={{
@@ -330,7 +337,7 @@ export default async function PlayerProfilePage({
                 }}
               >
                 <li>
-                  <strong>Team:</strong>{" "}
+                  <strong>{p.team}:</strong>{" "}
                   <Link
                     href={`/teams/${player.team_id}`}
                     style={{ color: "var(--ps-secondary)" }}
@@ -339,22 +346,22 @@ export default async function PlayerProfilePage({
                   </Link>
                 </li>
                 <li>
-                  <strong>Jersey:</strong> {player.jersey_number ?? "—"}
+                  <strong>{p.jersey}:</strong> {player.jersey_number ?? "—"}
                 </li>
                 <li>
-                  <strong>Games played:</strong> {totals.games_played}
+                  <strong>{p.gamesPlayed}:</strong> {totals.games_played}
                 </li>
                 <li>
-                  <strong>Goals conceded:</strong> {totals.goals_conceded}
+                  <strong>{p.goalsConceded}:</strong> {totals.goals_conceded}
                 </li>
               </ul>
             </div>
 
             {head && head.goals + head.assists + head.defenses > 0 ? (
               <div className="ps-card">
-                <span className="ps-section__eyebrow">Spirit of the Game</span>
+                <span className="ps-section__eyebrow">{p.spiritOfTheGame}</span>
                 <p style={{ color: "var(--ps-text-muted)", fontSize: 13 }}>
-                  SOTG ratings are not collected for this player yet.
+                  {p.noSotg}
                 </p>
               </div>
             ) : null}

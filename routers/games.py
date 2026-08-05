@@ -366,6 +366,9 @@ def record_event(
         )
 
     period = payload.period or _current_period(game, db)
+    # Guard the write path: never persist a negative elapsed time. The
+    # response schema also clamps, but we prevent corrupt rows at the source.
+    time_elapsed = max(payload.time_elapsed or 0, 0)
 
     try:
         event = models.GameEvent(
@@ -373,7 +376,7 @@ def record_event(
             player_id=player.id,
             event_type=payload.event_type,
             points=payload.points,
-            time_elapsed=payload.time_elapsed,
+            time_elapsed=time_elapsed,
             period=period,
         )
         db.add(event)

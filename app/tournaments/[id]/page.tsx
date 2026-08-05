@@ -12,7 +12,7 @@ import {
 } from "@/utils/api";
 import { getServerLocale } from "@/utils/i18n-server";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 type Params = { id: string };
 
@@ -192,7 +192,7 @@ export default async function TournamentDetailPage({
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div className="ps-card">
-              <span className="ps-section__eyebrow">Phase 1</span>
+              <span className="ps-section__eyebrow">{trn.roundRobin}</span>
               <h3 style={{ marginTop: 4 }}>{trn.roundRobin}</h3>
               <p>
                 {trn.roundRobinCopy.replace(
@@ -210,8 +210,8 @@ export default async function TournamentDetailPage({
                 {trn.bracket}
               </Link>
             </div>
-            <div className="ps-card">
-              <span className="ps-section__eyebrow">Phase 2</span>
+<div className="ps-card">
+              <span className="ps-section__eyebrow">{trn.playoffs}</span>
               <h3 style={{ marginTop: 4 }}>{trn.playoffs}</h3>
               <p>{trn.playoffsCopy}</p>
               <Link
@@ -222,8 +222,8 @@ export default async function TournamentDetailPage({
                 {trn.bracket}
               </Link>
             </div>
-            <div className="ps-card">
-              <span className="ps-section__eyebrow">Stats</span>
+<div className="ps-card">
+              <span className="ps-section__eyebrow">{common.viewStats}</span>
               <h3 style={{ marginTop: 4 }}>{trn.leaderboards}</h3>
               <p>{trn.leaderboardsCopy}</p>
               <Link

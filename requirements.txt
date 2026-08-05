@@ -19,6 +19,10 @@ pydantic[email]
 # --- File uploads (UploadFile / File(...) endpoints) ---
 python-multipart
 
+# --- Data import (CSV / XLSX roster & spirit-of-the-game) ---
+pandas==2.2.2
+openpyxl==3.1.5
+
 # --- Supabase client (Auth + Storage) ---
 supabase==2.5.3
 

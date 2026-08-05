@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/app/_components/AppShell";
+import { getServerLocale } from "@/utils/i18n-server";
 import {
   formatDate,
   formatPlayerName,
@@ -28,6 +29,10 @@ export default async function TeamProfilePage({
 
   const team = await teamsApi.get(teamId).catch(() => null);
   if (!team) notFound();
+
+  const { dict } = await getServerLocale();
+  const t = dict.team;
+  const c = dict.common;
 
   const [tournament, tournamentTeams] = await Promise.all([
     tournamentsApi.get(team.tournament_id).catch(() => null),
@@ -60,16 +65,16 @@ export default async function TeamProfilePage({
   const accent = teamColor(team.name);
 
   return (
-    <AppShell
-      brandSubtitle={`${team.name} · Team profile`}
+<AppShell
+      brandSubtitle={`${team.name} · ${t.profile}`}
       authLinks={[
         {
-          label: "← Tournament hub",
+          label: t.tournamentHub,
           href: tournament ? `/tournaments/${tournament.id}` : "/tournaments",
           variant: "ghost",
         },
         {
-          label: "Rankings",
+          label: dict.navigation.rankings,
           href: "/rankings",
           variant: "ghost",
         },
@@ -95,11 +100,39 @@ export default async function TeamProfilePage({
           >
             {team.name.slice(0, 2).toUpperCase()}
           </span>
-          <div>
-            <span className="ps-section__eyebrow">
-              {tournament?.name ?? "Tournament"}
+<div>
+<span className="ps-section__eyebrow">
+              {tournament?.name ?? c.tournament}
             </span>
-            <h1 style={{ marginTop: 4 }}>{team.name}</h1>
+            <h1
+              style={{
+                marginTop: 4,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              {team.name}
+              {/* Monospace team-ID badge so admins can cross-reference the
+                  database tables quickly. */}
+              <span
+                className="ps-id-badge"
+                style={{
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: "var(--ps-text-muted)",
+                  background: "var(--ps-surface-container-high)",
+                  border: "1px solid var(--ps-border)",
+                  borderRadius: "var(--ps-radius-full)",
+                  padding: "2px 10px",
+                  letterSpacing: "0.02em",
+                }}
+              >
+                #{team.id}
+              </span>
+            </h1>
             {tournament ? (
               <p style={{ color: "var(--ps-text-muted)", marginTop: 4 }}>
                 {formatDate(tournament.start_date)} →{" "}
@@ -117,23 +150,23 @@ export default async function TeamProfilePage({
             marginBottom: 24,
           }}
         >
-          <div className="ps-stat-tile">
+<div className="ps-stat-tile">
             <span className="ps-stat-tile__value ps-stat-tile__value--accent">
               {wins}
             </span>
-            <span className="ps-stat-tile__label">Wins</span>
+            <span className="ps-stat-tile__label">{t.wins}</span>
           </div>
           <div className="ps-stat-tile">
             <span className="ps-stat-tile__value">{losses}</span>
-            <span className="ps-stat-tile__label">Losses</span>
+            <span className="ps-stat-tile__label">{t.losses}</span>
           </div>
           <div className="ps-stat-tile">
             <span className="ps-stat-tile__value">{team.players.length}</span>
-            <span className="ps-stat-tile__label">Roster size</span>
+            <span className="ps-stat-tile__label">{t.rosterSize}</span>
           </div>
           <div className="ps-stat-tile">
             <span className="ps-stat-tile__value">{allGames.length}</span>
-            <span className="ps-stat-tile__label">Games played</span>
+            <span className="ps-stat-tile__label">{t.gamesPlayed}</span>
           </div>
         </div>
 
@@ -147,12 +180,14 @@ export default async function TeamProfilePage({
                 marginBottom: 12,
               }}
             >
-              <h2 style={{ fontSize: 18 }}>Roster</h2>
-              <span className="ps-pill">{team.players.length} players</span>
+<h2 style={{ fontSize: 18 }}>{t.roster}</h2>
+              <span className="ps-pill">
+                {team.players.length} {c.players}
+              </span>
             </header>
             {team.players.length === 0 ? (
               <p style={{ color: "var(--ps-text-muted)", fontSize: 13 }}>
-                No players registered yet.
+                {t.noPlayersCopy}
               </p>
             ) : (
               <ul
@@ -210,21 +245,23 @@ export default async function TeamProfilePage({
                 justifyContent: "space-between",
               }}
             >
-              <h2 style={{ fontSize: 18 }}>Match history</h2>
-              <span className="ps-pill">{allGames.length} games</span>
+<h2 style={{ fontSize: 18 }}>{t.matchHistory}</h2>
+              <span className="ps-pill">
+                {allGames.length} {c.games}
+              </span>
             </header>
             {allGames.length === 0 ? (
               <p style={{ color: "var(--ps-text-muted)", padding: 16, fontSize: 13 }}>
-                No games scheduled yet.
+                {t.noGamesCopy}
               </p>
             ) : (
               <table className="ps-table">
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Opponent</th>
-                    <th style={{ textAlign: "right" }}>Score</th>
-                    <th>Result</th>
+                    <th>{c.date}</th>
+                    <th>{c.opponent}</th>
+                    <th style={{ textAlign: "right" }}>{c.score}</th>
+                    <th>{c.result}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -238,13 +275,13 @@ export default async function TeamProfilePage({
                       (isHome ? g.away_team?.name : g.home_team?.name);
                     let result: { label: string; tone: "win" | "loss" | "pending" };
                     if (!g.is_completed) {
-                      result = { label: "Pending", tone: "pending" };
+                      result = { label: c.pending, tone: "pending" };
                     } else if (us > them) {
-                      result = { label: "Win", tone: "win" };
+                      result = { label: c.win, tone: "win" };
                     } else if (us < them) {
-                      result = { label: "Loss", tone: "loss" };
+                      result = { label: c.loss, tone: "loss" };
                     } else {
-                      result = { label: "Tie", tone: "pending" };
+                      result = { label: c.tie, tone: "pending" };
                     }
                     return (
                       <tr key={g.id}>
