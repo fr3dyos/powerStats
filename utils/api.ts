@@ -269,6 +269,16 @@ export const teamsApi = {
 export const playersApi = {
   listByTeam: (teamId: number) =>
     apiFetch<Player[]>("/players", { query: { team_id: teamId } }),
+  create: (input: {
+    first_name: string;
+    last_name: string;
+    jersey_number: number | null;
+    team_id: number;
+  }) =>
+    apiFetch<Player>("/players", {
+      method: "POST",
+      body: input,
+    }),
   get: (id: number) =>
     apiFetch<Player & { game_events: GameEvent[] }>(`/players/${id}`),
   stats: (id: number) =>
