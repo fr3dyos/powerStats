@@ -1,6 +1,6 @@
-import { cookies, headers } from "next/headers";
+import { cookies, headers } from 'next/headers';
 
-import { getDictionary, pickLocale, LOCALE_COOKIE, type Locale } from "@/utils/i18n";
+import { getDictionary, pickLocale, LOCALE_COOKIE, type Locale } from '@/utils/i18n';
 
 /**
  * Resolve the current locale from the request context.
@@ -21,13 +21,13 @@ export async function resolveLocale(): Promise<Locale> {
 
   try {
     const headerStore = await headers();
-    const acceptLanguage = headerStore.get("accept-language");
+    const acceptLanguage = headerStore.get('accept-language');
     if (acceptLanguage) return pickLocale(acceptLanguage);
   } catch {
     /* not in a request context */
   }
 
-  return "en";
+  return 'en';
 }
 
 /**
