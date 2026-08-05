@@ -16,6 +16,8 @@ import {
   type Team,
 } from "@/utils/api";
 
+import AddPlayerForm from "./AddPlayerForm";
+
 export const dynamic = "force-dynamic";
 
 const ALLOWED_ROLES = new Set(["admin", "scorekeeper"]);
@@ -35,6 +37,7 @@ const { dict } = await getServerLocale();
   const auth = dict.auth;
   const dashboard = dict.adminDashboard;
   const ap = dict.adminPlayers;
+  const at = dict.adminTournaments;
   const nav = dict.navigation;
 
   // Gather every tournament, its teams, and every player on those teams to
@@ -87,6 +90,24 @@ authLinks={[
         <p className="ps-admin__subtitle">
           {dashboard.playersCopy} {ap.title.toLowerCase()} directory.
         </p>
+
+        <AddPlayerForm
+          teams={perTournament.flatMap(({ teams }) => teams)}
+          copy={{
+            addPlayer: at.addPlayer,
+            firstName: at.firstName,
+            lastName: at.lastName,
+            jersey: at.jersey,
+            team: at.team,
+            selectTeam: at.selectTeam,
+            save: at.save,
+            cancel: at.cancel,
+            requiredFields: at.requiredFields,
+            playerExists: at.playerExists,
+            playerAdded: at.playerAdded,
+            playerAddFailed: at.playerAddFailed,
+          }}
+        />
 
         {allPlayers.length === 0 ? (
           <div className="ps-card">
