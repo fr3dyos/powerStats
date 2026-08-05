@@ -1,34 +1,31 @@
-# PowerStats — Python Backend Dependencies
-# Install: pip install -r requirements.txt
+# FastAPI backend
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+pydantic==2.7.0
+pydantic[email]==2.7.0
 
-# --- Web framework ---
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-
-# --- Database ---
-sqlalchemy==2.0.35
+# Database
+sqlalchemy==2.0.29
 psycopg2-binary==2.9.9
 
-# --- Environment variables (load .env) ---
+# Supabase
+supabase==2.4.0
+
+# File uploads
+python-multipart==0.0.9
+
+# Data processing (for CSV/XLSX imports in admin)
+pandas==2.2.2
+openpyxl==3.1.2
+
+# Environment variables
 python-dotenv==1.0.1
 
-# --- Validation ---
-pydantic==1.10.18
-pydantic[email]
+# HTTP client for testing
+httpx==0.27.0
+pytest==8.1.1
+pytest-asyncio==0.23.6
 
-# --- File uploads (UploadFile / File(...) endpoints) ---
-python-multipart
-
-# --- Data import (CSV / XLSX roster & spirit-of-the-game) ---
-pandas==2.2.2
-openpyxl==3.1.5
-
-# --- Supabase client (Auth + Storage) ---
-supabase==2.5.3
-
-# --- CORS (for local frontend dev) ---
-# fastapi includes starlette which has CORSMiddleware built-in
-
-# --- ASGI server ---
-# uvicorn handles server duties (listed above)
-
+# Linting / type checking
+ruff==0.4.1
+mypy==1.10.0

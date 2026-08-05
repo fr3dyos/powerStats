@@ -17,6 +17,7 @@ class GameEventTypeEnum(str, enum.Enum):
     ASSIST = "assist"
     DEFENSE = "defense"
     TIMEOUT = "timeout"
+    TIMEOUT_END = "timeout_end"
     HALF = "half"
     SUBSTITUTION = "substitution"
 
@@ -77,13 +78,13 @@ class Phase(Base):
     # explicit admin-set status.
     status_mode = Column(String(16), nullable=False, default="auto")
     # Config JSON stores, for example:
-    #   {
-    #     "points_win": 3, "points_draw": 1, "points_loss": 0,
-    #     "group_count": 2, "advancing_teams": 2,
-    #     "tiebreakers": ["points", "goal_difference", "goals_for",
-    #                     "goals_against", "direct_matchup", "spirit_score"],
-    #     "include_placement_matches": true
-    #   }
+    # {
+    #   "points_win": 3, "points_draw": 1, "points_loss": 0,
+    #   "group_count": 2, "advancing_teams": 2,
+    #   "tiebreakers": ["points", "goal_difference", "goals_for",
+    #                   "goals_against", "direct_matchup", "spirit_score"],
+    #   "include_placement_matches": true
+    # }
     config = Column(JSON, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -157,6 +158,7 @@ class Player(Base):
     last_name = Column(String(255), nullable=False)
     jersey_number = Column(Integer)
     team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    photo_url = Column(String(255))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -240,7 +242,7 @@ class SpiritScore(Base):
     score_3 = Column(Integer, nullable=False, default=0)  # fair-mindedness
     score_4 = Column(Integer, nullable=False, default=0)  # positive attitude
     score_5 = Column(Integer, nullable=False, default=0)  # communication
-    total = Column(Integer, nullable=False, default=0)  # sum of the five scores
+    total = Column(Integer, nullable=False, default=0)    # sum of the five scores
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -248,7 +250,6 @@ class SpiritScore(Base):
     tournament = relationship("Tournament")
     team = relationship("Team", foreign_keys=[team_id])
     team_against = relationship("Team", foreign_keys=[team_against_id])
-
 
 # PlayerTournamentStats model
 class PlayerTournamentStats(Base):

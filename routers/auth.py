@@ -27,7 +27,6 @@ from routers.deps import get_supabase_admin_client
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-
 # ---------------------------------------------------------------------------
 # Pydantic request/response models (auth-specific; kept local to this router)
 # ---------------------------------------------------------------------------
@@ -38,21 +37,17 @@ class RoleEnum(str, Enum):
     SCOREKEEPER = "scorekeeper"
     PUBLIC = "public"
 
-
 class RegisterRequest(BaseModel):
     """Payload for creating a new Supabase Auth user."""
 
     email: EmailStr
     password: str = Field(..., min_length=8)
-    role: RoleEnum = RoleEnum.PUBLIC
-
 
 class LoginRequest(BaseModel):
     """Payload for password-based sign in."""
 
     email: EmailStr
     password: str
-
 
 class UserOut(BaseModel):
     """Public representation of an authenticated Supabase user."""
@@ -61,12 +56,10 @@ class UserOut(BaseModel):
     email: Optional[str] = None
     role: Optional[str] = None
 
-
 class MessageOut(BaseModel):
     """Simple message response."""
 
     message: str
-
 
 # ---------------------------------------------------------------------------
 # Client helpers (read credentials from the environment only)
@@ -85,7 +78,6 @@ def _get_anon_client():
         )
     return create_client(supabase_url, anon_key)
 
-
 def _extract_role(user) -> Optional[str]:
     """Read the role from a Supabase user's app metadata.
 
@@ -102,7 +94,6 @@ def _extract_role(user) -> Optional[str]:
     if nested and isinstance(nested, dict):
         return nested.get("role")
     return None
-
 
 # ---------------------------------------------------------------------------
 # Role-check dependency factory
@@ -163,14 +154,12 @@ def require_roles(*allowed_roles: str, allow_anonymous: bool = False):
 
     return _role_checker
 
-
 # Alias dependencies for convenience across routers.
 require_admin = require_roles("admin")
 require_scorekeeper = require_roles("admin", "scorekeeper")
 # Public endpoints allow anonymous browsing (no token required). If a token
 # is present it is still validated and restricted to the allowed roles.
 require_public = require_roles("admin", "scorekeeper", "public", allow_anonymous=True)
-
 
 def get_current_user(
     authorization: Optional[str] = Header(None),
@@ -203,20 +192,18 @@ def get_current_user(
         "role": _extract_role(user),
     }
 
-
 # ---------------------------------------------------------------------------
 # Public endpoints
 # ---------------------------------------------------------------------------
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest):
-    """Create a new Supabase Auth user with an initial application role.
+    """Create a new Supabase Auth user with the default ``public`` role.
 
-    Uses the anon client for sign-up; then, if a role different from the
-    default is requested, updates ``app_metadata.role`` via the service-role
-    client. Only ``public`` is permitted for self-registration unless the
-    caller supplies a valid admin token (see ``admin_update_role``).
+    Uses the anon client for sign-up. All self-registered users receive the
+    ``public`` role; only an existing admin can promote a user via
+    ``admin_update_role``.
 
-    :param payload: Registration data (email, password, role).
+    :param payload: Registration data (email, password).
     :return: The created user's id, email and role.
     """
     try:
@@ -238,20 +225,19 @@ def register(payload: RegisterRequest):
             detail=f"Registration failed: {str(exc)}",
         ) from exc
 
-    # Assign the requested role via service-role admin client.
+    # Assign the default public role via service-role admin client.
     try:
         admin_client = get_supabase_admin_client()
         admin_client.auth.admin.update_user_by_id(
-            user.id, {"app_metadata": {"role": payload.role.value}}
+            user.id, {"app_metadata": {"role": RoleEnum.PUBLIC.value}}
         )
     except Exception as exc:  # pragma: no cover - role assignment is best-effort
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Could not assign role '{payload.role.value}': {str(exc)}",
+            detail=f"Could not assign default role: {str(exc)}",
         ) from exc
 
-    return UserOut(id=user.id, email=user.email, role=payload.role.value)
-
+    return UserOut(id=user.id, email=user.email, role=RoleEnum.PUBLIC.value)
 
 @router.post("/login", response_model=dict)
 def login(payload: LoginRequest):
@@ -290,7 +276,6 @@ def login(payload: LoginRequest):
         ),
     }
 
-
 @router.post("/logout", response_model=MessageOut)
 def logout(authorization: Optional[str] = Header(None)):
     """Sign out the current user by revoking their session token.
@@ -315,7 +300,6 @@ def logout(authorization: Optional[str] = Header(None)):
         ) from exc
     return MessageOut(message="Signed out successfully.")
 
-
 @router.get("/me", response_model=UserOut)
 def me(current_user: dict = Depends(get_current_user)):
     """Return the currently authenticated user's profile.
@@ -325,7 +309,6 @@ def me(current_user: dict = Depends(get_current_user)):
     """
     return UserOut(**current_user)
 
-
 # ---------------------------------------------------------------------------
 # Admin-only endpoints
 # ---------------------------------------------------------------------------
@@ -334,7 +317,6 @@ class RoleUpdateRequest(BaseModel):
 
     user_id: str
     role: RoleEnum
-
 
 @router.put("/users/{user_id}/role", response_model=UserOut)
 def admin_update_role(
@@ -370,7 +352,6 @@ def admin_update_role(
         role=payload.role.value,
     )
 
-
 @router.get("/users", response_model=List[UserOut])
 def admin_list_users(_: str = Depends(require_admin)):
     """List all Supabase Auth users (admin only).
@@ -396,4 +377,3 @@ def admin_list_users(_: str = Depends(require_admin)):
             )
         )
     return out
-

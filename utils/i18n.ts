@@ -1,29 +1,42 @@
-import en from "@/en.json";
-import es from "@/es.json";
-import ptBR from "@/pt-BR.json";
+import { notFound } from 'next/navigation';
+import { getRequestConfig } from 'next-intl/server';
 
-export type Locale = "en" | "es" | "pt-BR";
+export const LOCALES = ['en', 'es', 'pt-BR'] as const;
+export type Locale = (typeof LOCALES)[number];
 
-export const LOCALES: Locale[] = ["en", "es", "pt-BR"];
+export const DEFAULT_LOCALE: Locale = 'en';
+export const LOCALE_COOKIE = 'ps_locale';
 
-export const LOCALE_COOKIE = "ps_locale";
+const localeSet = new Set<string>(LOCALES);
 
-const dictionaries: Record<Locale, Record<string, any>> = {
-  en,
-  es,
-  "pt-BR": ptBR,
-};
-
-export function getDictionary(locale: Locale) {
-  return dictionaries[locale] ?? dictionaries.en;
+export function pickLocale(input: string | undefined | null): Locale {
+  if (!input) return DEFAULT_LOCALE;
+  const lower = input.toLowerCase().trim();
+  for (const locale of LOCALES) {
+    if (locale.toLowerCase() === lower) return locale;
+  }
+  // Handle e.g. "pt-BR,pt;q=0.9,en;q=0.8"
+  const first = lower.split(',')[0].split(';')[0].trim();
+  for (const locale of LOCALES) {
+    if (locale.toLowerCase() === first) return locale;
+  }
+  // Handle "en-US" -> "en"
+  const base = first.split('-')[0];
+  for (const locale of LOCALES) {
+    if (locale.toLowerCase() === base) return locale;
+  }
+  return DEFAULT_LOCALE;
 }
 
-export function pickLocale(input?: string | null | undefined): Locale {
-  if (!input) return "en";
-  const lower = input.toLowerCase();
-  if (lower.startsWith("es")) return "es";
-  if (lower.startsWith("pt")) return "pt-BR";
-  return "en";
-}
+export default getRequestConfig(async ({ locale }) => {
+  const resolved = pickLocale(locale);
 
-export type Dictionary = ReturnType<typeof getDictionary>;
+  try {
+    const messages = (await import(`../messages/${resolved}.json`)).default;
+    return { messages, locale: resolved };
+  } catch {
+    // Fallback to default locale if a translation file is missing
+    const messages = (await import(`../messages/${DEFAULT_LOCALE}.json`)).default;
+    return { messages, locale: DEFAULT_LOCALE };
+  }
+});
