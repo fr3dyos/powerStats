@@ -1,13 +1,15 @@
-import Link from "next/link";
-
 import { AppShell } from "@/app/_components/AppShell";
 import {
-  formatDateRange,
-  teamColor,
-  tournamentsApi,
+  gamesApi,
   teamsApi,
+  tournamentsApi,
 } from "@/utils/api";
 import { getServerLocale } from "@/utils/i18n-server";
+
+import {
+  TournamentBrowser,
+  type TournamentStatus,
+} from "./TournamentBrowser";
 
 export const revalidate = 60;
 
@@ -18,18 +20,49 @@ export default async function TournamentsListPage() {
   const nav = dict.navigation;
 
   const tournaments = await tournamentsApi.list(100).catch(() => []);
+
   // Pre-fetch team counts so each card shows the team count without N+1.
-  const teamCounts = await Promise.all(
+  const teamCounts: Record<number, number> = {};
+  await Promise.all(
     tournaments.map(async (t) => {
       try {
         const teams = await teamsApi.listByTournament(t.id);
-        return { id: t.id, count: teams.length };
+        teamCounts[t.id] = teams.length;
       } catch {
-        return { id: t.id, count: 0 };
+        teamCounts[t.id] = 0;
       }
     }),
   );
-  const countById = new Map(teamCounts.map((c) => [c.id, c.count]));
+
+  // Classify each tournament by status. Games API failures are swallowed so
+  // the page still renders when the games endpoint is unavailable — those
+  // tournaments fall back to date-based status.
+  const statuses: Record<number, TournamentStatus> = {};
+  const now = Date.now();
+  for (const t of tournaments) {
+    let hasInProgress = false;
+    let gamesUnavailable = false;
+    try {
+      const games = await gamesApi.listByTournament(t.id);
+      hasInProgress = games.some((g) => !g.is_completed);
+    } catch {
+      gamesUnavailable = true;
+    }
+    const start = new Date(t.start_date).getTime();
+    const end = new Date(t.end_date).getTime();
+    if (hasInProgress) {
+      statuses[t.id] = "live";
+    } else if (end < now) {
+      statuses[t.id] = "completed";
+    } else if (start > now) {
+      statuses[t.id] = "upcoming";
+    } else {
+      // Tournament window is open. If we couldn't reach the games endpoint we
+      // can't prove a game is live, so fall back to "upcoming" rather than
+      // mislabeling. Otherwise treat as live.
+      statuses[t.id] = gamesUnavailable ? "upcoming" : "live";
+    }
+  }
 
   return (
     <AppShell
@@ -53,61 +86,24 @@ export default async function TournamentsListPage() {
             <p>{trn.noTournamentsCopy}</p>
           </div>
         ) : (
-          <div className="ps-card-list">
-            {tournaments.map((t) => {
-              const accent = teamColor(t.name);
-              return (
-                <Link
-                  key={t.id}
-                  href={`/tournaments/${t.id}`}
-                  className="ps-card ps-card--linked"
-                  style={{
-                    borderLeft: accent
-                      ? `3px solid ${accent}`
-                      : "3px solid var(--ps-primary-container)",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <span className="ps-pill">
-                      {countById.get(t.id) ?? 0} {common.teams}
-                    </span>
-                    <span
-                      className="ps-card__icon"
-                      aria-hidden="true"
-                      style={{
-                        background: accent ?? "var(--ps-surface-container-high)",
-                        color: "#fff",
-                      }}
-                    >
-                      {(t.name ?? "?").slice(0, 2).toUpperCase()}
-                    </span>
-                  </div>
-                  <h3 style={{ marginTop: 8 }}>{t.name}</h3>
-                  <p style={{ fontSize: 13 }}>
-                    {formatDateRange(t.start_date, t.end_date)}
-                  </p>
-                  {t.location ? (
-                    <p
-                      style={{
-                        fontSize: 12,
-                        color: "var(--ps-text-muted)",
-                        margin: 0,
-                      }}
-                    >
-                      📍 {t.location}
-                    </p>
-                  ) : null}
-                  <span className="ps-card__footer">{common.viewTournament} →</span>
-                </Link>
-              );
-            })}
-          </div>
+          <TournamentBrowser
+            tournaments={tournaments}
+            teamCounts={teamCounts}
+            statuses={statuses}
+            copy={{
+              teams: common.teams,
+              viewTournament: common.viewTournament,
+              searchPlaceholder: trn.searchPlaceholder,
+              filterAll: trn.filterAll,
+              filterUpcoming: trn.filterUpcoming,
+              filterLive: trn.filterLive,
+              filterCompleted: trn.filterCompleted,
+              statusUpcoming: trn.statusUpcoming,
+              statusLive: trn.statusLive,
+              statusCompleted: trn.statusCompleted,
+              noMatches: trn.noMatches,
+            }}
+          />
         )}
       </section>
     </AppShell>

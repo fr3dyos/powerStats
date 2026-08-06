@@ -76,7 +76,7 @@ export function LiveScoringConsole({
   const record = useCallback(
     async (
       playerId: number,
-      type: "goal" | "assist" | "defense",
+      type: "goal" | "assist" | "defense" | "substitution",
       points = 1,
     ) => {
       if (!canEdit || game.is_completed) return;
@@ -114,6 +114,49 @@ export function LiveScoringConsole({
     },
     [canEdit, game.id, game.is_completed, period],
   );
+
+  const undoLastEvent = useCallback(async () => {
+    if (!canEdit || game.is_completed) return;
+    if (events.length === 0) return;
+    // Snapshot the previous event list so we can restore on failure.
+    const previousEvents = events;
+    const previousLastId = lastEventId;
+    // Optimistic UI: drop the last event from view immediately, then ask the
+    // backend to confirm. The server is the source of truth — on failure we
+    // restore the snapshot, on success we sync the refreshed game state.
+    setEvents((cur) => cur.slice(0, -1));
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/games/${game.id}/events/undo`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const detail = await res
+          .json()
+          .catch(() => ({ detail: res.statusText }));
+        throw new Error(detail.detail ?? `Request failed (${res.status})`);
+      }
+      const refreshed = await fetch(`/api/admin/games/${game.id}`);
+      if (refreshed.ok) {
+        const g = await refreshed.json();
+        setGame(g);
+      }
+      // Re-anchor lastEventId to the now-newest remaining event. We compute
+      // it from the previousEvents snapshot (which had one fewer entry after
+      // the optimistic drop above) — a sync read here is safe because the
+      // state has already settled by the time we run after the network call.
+      setLastEventId(previousEvents[previousEvents.length - 2]?.id ?? null);
+    } catch (err) {
+      // Roll back optimistic update.
+      setEvents(previousEvents);
+      setLastEventId(previousLastId);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [canEdit, events, game.id, game.is_completed, lastEventId]);
 
   const startTimeout = useCallback(
     async (which: "home" | "away") => {
@@ -343,6 +386,19 @@ export function LiveScoringConsole({
           <button
             type="button"
             className="ps-btn ps-btn--ghost"
+            onClick={() => undoLastEvent()}
+            disabled={
+              !canEdit ||
+              game.is_completed ||
+              busy ||
+              events.length === 0
+            }
+          >
+            Undo last event
+          </button>
+          <button
+            type="button"
+            className="ps-btn ps-btn--ghost"
             onClick={() => endTimeout()}
             disabled={!canEdit || game.is_completed || busy}
           >
@@ -470,8 +526,9 @@ export function LiveScoringConsole({
           marginTop: 4,
         }}
       >
-        Need to undo? The FastAPI endpoint currently appends events; a future
-        admin-only undo will remove the last event.
+        Use the Undo button to reverse the most recent event. The server is
+        the source of truth — if the rollback fails, the console restores the
+        previous event list and surfaces the error above.
       </p>
     </div>
   );
@@ -497,7 +554,10 @@ function TeamColumn({
   canEdit: boolean;
   busy: boolean;
   players: Player[];
-  onAction: (playerId: number, type: "goal" | "assist" | "defense") => void;
+  onAction: (
+    playerId: number,
+    type: "goal" | "assist" | "defense" | "substitution",
+  ) => void;
   onTimeout: () => void;
 }) {
   return (
@@ -656,6 +716,20 @@ function TeamColumn({
                   disabled={!canEdit || busy}
                 >
                   D
+                </button>
+                <button
+                  type="button"
+                  className="ps-btn ps-btn--ghost"
+                  style={{
+                    fontSize: 10,
+                    padding: "4px 8px",
+                  }}
+                  onClick={() => onAction(p.id, "substitution")}
+                  disabled={!canEdit || busy}
+                  aria-label="Substitution"
+                  title="Substitution"
+                >
+                  S
                 </button>
               </div>
             ))

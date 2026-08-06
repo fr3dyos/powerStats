@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -10,12 +9,12 @@ import {
   gamesApi,
   teamsApi,
   tournamentsApi,
-  formatDate,
-  formatDateRange,
   type Game,
   type Team,
   type Tournament,
 } from "@/utils/api";
+
+import AdminTournamentsTable from "./AdminTournamentsTable";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +59,37 @@ export default async function AdminTournamentsPage() {
     0,
   );
 
+  // Flat dict of strings the client table needs. Passing literal strings (not
+  // the whole dict) keeps the client component free of the i18n runtime and
+  // means the client bundle only ships what's actually rendered.
+  const tableLabels = {
+    name: at.name,
+    dates: at.dates,
+    teams: at.teams,
+    games: at.games,
+    actions: at.actions,
+    status: at.status,
+    phaseRoundRobin: at.phaseRoundRobin,
+    phaseBracket: at.phaseBracket,
+    phasePending: at.phasePending,
+    phaseInProgress: at.phaseInProgress,
+    phaseCompleted: at.phaseCompleted,
+    notStarted: at.notStarted,
+    inProgress: at.inProgress,
+    completed: at.completed,
+    viewTournament: dict.common.viewTournament,
+    viewBracket: dict.common.viewBracket,
+    newTournament: at.newTournament,
+    editSelected: at.editSelected,
+    deleteSelected: at.deleteSelected,
+    selectAll: at.selectAll,
+    selectRow: at.selectRow,
+    noneSelected: at.noneSelected,
+    oneSelected: at.oneSelected,
+    manySelected: at.manySelected,
+    deleteConfirm: at.deleteConfirm,
+  };
+
   return (
     <AppShell
       brandSubtitle={auth.adminBrand}
@@ -91,90 +121,7 @@ export default async function AdminTournamentsPage() {
             <p>{at.emptyCopy}</p>
           </div>
         ) : (
-          <div className="ps-card" style={{ padding: 0, overflow: "hidden" }}>
-            <table className="ps-table">
-              <thead>
-                <tr>
-                  <th>{at.name}</th>
-                  <th>{at.dates}</th>
-                  <th style={{ textAlign: "right" }}>{at.teams}</th>
-                  <th style={{ textAlign: "right" }}>{at.games}</th>
-                  <th style={{ textAlign: "right" }}>{at.actions}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(({ tournament, teams: tlist, games: glist }) => {
-                  const completed = glist.filter((g) => g.is_completed).length;
-                  return (
-                    <tr key={tournament.id}>
-                      <td>
-                        <Link
-                          href={`/tournaments/${tournament.id}`}
-                          style={{
-                            color: "var(--ps-text)",
-                            fontWeight: 600,
-                            textDecoration: "none",
-                          }}
-                        >
-                          {tournament.name}
-                        </Link>
-                        {tournament.location ? (
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "var(--ps-text-muted)",
-                            }}
-                          >
-                            {tournament.location}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td>
-                        <span style={{ fontSize: 13 }}>
-                          {formatDateRange(tournament.start_date, tournament.end_date)}
-                        </span>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "var(--ps-text-muted)",
-                          }}
-                        >
-                          {formatDate(tournament.start_date)} → {formatDate(tournament.end_date)}
-                        </div>
-                      </td>
-                      <td className="ps-table__num" style={{ textAlign: "right" }}>
-                        {tlist.length}
-                      </td>
-                      <td className="ps-table__num" style={{ textAlign: "right" }}>
-                        {completed}/{glist.length}
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        <Link
-                          href={`/tournaments/${tournament.id}`}
-                          style={{
-                            fontSize: 12,
-                            color: "var(--ps-accent)",
-                            marginRight: 12,
-                          }}
-                        >
-                          {dict.common.viewTournament}
-                        </Link>
-                        <Link
-                          href={`/tournaments/${tournament.id}/bracket`}
-                          style={{
-                            fontSize: 12,
-                            color: "var(--ps-accent)",
-                          }}
-                        >
-                          {dict.common.viewBracket}
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <AdminTournamentsTable rows={rows} labels={tableLabels} />
         )}
       </section>
     </AppShell>

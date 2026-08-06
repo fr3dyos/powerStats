@@ -4,17 +4,28 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/app/_components/AppShell";
 import {
   computeStandings,
+  formatDate,
   formatDateRange,
   gamesApi,
   teamsApi,
   teamColor,
   tournamentsApi,
+  type Game,
+  type Team,
 } from "@/utils/api";
 import { getServerLocale } from "@/utils/i18n-server";
 
 export const revalidate = 60;
 
 type Params = { id: string };
+
+/** Look up home/away teams for a fixture (tolerates missing data). */
+function matchTeams(game: Game, teamMap: Map<number, Team>) {
+  return {
+    home: teamMap.get(game.home_team_id) ?? null,
+    away: teamMap.get(game.away_team_id) ?? null,
+  };
+}
 
 export default async function TournamentDetailPage({
   params,
@@ -38,9 +49,37 @@ export default async function TournamentDetailPage({
 
   if (!tournament) notFound();
 
+  const teamMap = new Map<number, Team>(teams.map((t) => [t.id, t]));
   const standings = computeStandings(teams, games);
   const completed = games.filter((g) => g.is_completed);
   const live = games.filter((g) => !g.is_completed);
+
+  // Live games: earliest scheduled first, then stable fallback by id.
+  const liveSorted = [...live].sort((a, b) => {
+    const at = a.start_time
+      ? Date.parse(a.start_time)
+      : Number.POSITIVE_INFINITY;
+    const bt = b.start_time
+      ? Date.parse(b.start_time)
+      : Number.POSITIVE_INFINITY;
+    if (at !== bt) return at - bt;
+    return a.id - b.id;
+  });
+  // Completed fixtures: most recently finished first.
+  const completedSorted = [...completed].sort((a, b) => {
+    const at = a.end_time
+      ? Date.parse(a.end_time)
+      : a.start_time
+        ? Date.parse(a.start_time)
+        : 0;
+    const bt = b.end_time
+      ? Date.parse(b.end_time)
+      : b.start_time
+        ? Date.parse(b.start_time)
+        : 0;
+    if (at !== bt) return bt - at;
+    return b.id - a.id;
+  });
 
   return (
     <AppShell
@@ -52,35 +91,41 @@ export default async function TournamentDetailPage({
       ]}
     >
       <section className="ps-admin">
-        <div className="ps-section">
-          <span className="ps-section__eyebrow">{trn.multiPhase}</span>
-          <h1>{tournament.name}</h1>
-          <p>
-            {formatDateRange(tournament.start_date, tournament.end_date)}
-            {tournament.location ? ` · ${tournament.location}` : ""}
-          </p>
-        </div>
+        {/* ─── Overview ─────────────────────────────────────────────── */}
+        <header>
+          <div className="ps-section">
+            <span className="ps-section__eyebrow">{trn.multiPhase}</span>
+            <h1>{tournament.name}</h1>
+            <p>
+              {formatDateRange(tournament.start_date, tournament.end_date)}
+              {tournament.location ? ` · ${tournament.location}` : ""}
+            </p>
+          </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-            marginBottom: 24,
-          }}
-        >
-          <span className="ps-status-badge ps-status-badge--completed">
-            {teams.length} {common.teams}
-          </span>
-          <span className="ps-status-badge ps-status-badge--completed">
-            {completed.length}/{games.length} {common.gamesPlayed}
-          </span>
-          {live.length > 0 ? (
-            <span className="ps-live-pill">{live.length} {common.live}</span>
-          ) : null}
-        </div>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              marginBottom: 24,
+            }}
+          >
+            <span className="ps-status-badge ps-status-badge--completed">
+              {teams.length} {common.teams}
+            </span>
+            <span className="ps-status-badge ps-status-badge--completed">
+              {completed.length}/{games.length} {common.gamesPlayed}
+            </span>
+            {live.length > 0 ? (
+              <span className="ps-live-pill">
+                {live.length} {common.live}
+              </span>
+            ) : null}
+          </div>
+        </header>
 
-        <div className="ps-split ps-split--2-1">
+        {/* ─── Standings ────────────────────────────────────────────── */}
+        <div className="ps-split ps-split--2-1" style={{ marginBottom: 32 }}>
           <div
             className="ps-card"
             style={{ padding: 0, overflow: "hidden" }}
@@ -210,7 +255,7 @@ export default async function TournamentDetailPage({
                 {trn.bracket}
               </Link>
             </div>
-<div className="ps-card">
+            <div className="ps-card">
               <span className="ps-section__eyebrow">{trn.playoffs}</span>
               <h3 style={{ marginTop: 4 }}>{trn.playoffs}</h3>
               <p>{trn.playoffsCopy}</p>
@@ -222,7 +267,7 @@ export default async function TournamentDetailPage({
                 {trn.bracket}
               </Link>
             </div>
-<div className="ps-card">
+            <div className="ps-card">
               <span className="ps-section__eyebrow">{common.viewStats}</span>
               <h3 style={{ marginTop: 4 }}>{trn.leaderboards}</h3>
               <p>{trn.leaderboardsCopy}</p>
@@ -236,6 +281,279 @@ export default async function TournamentDetailPage({
             </div>
           </div>
         </div>
+
+        {/* ─── Live games ───────────────────────────────────────────── */}
+        <section style={{ marginBottom: 32 }}>
+          <div className="ps-section">
+            <span className="ps-section__eyebrow">{common.liveNow}</span>
+            <h2>{common.liveNow}</h2>
+            <p>{trn.gamesInProgress.replace("{count}", String(live.length))}</p>
+          </div>
+
+          {liveSorted.length === 0 ? (
+            <div className="ps-card" style={{ textAlign: "center" }}>
+              <p style={{ margin: 0 }}>{common.noGames}</p>
+            </div>
+          ) : (
+            <div className="ps-card-list">
+              {liveSorted.map((g) => {
+                const { home, away } = matchTeams(g, teamMap);
+                const homeColor = teamColor(home?.name);
+                const awayColor = teamColor(away?.name);
+                return (
+                  <Link
+                    key={g.id}
+                    href={`/games/${g.id}`}
+                    className="ps-card ps-card--linked"
+                    style={{
+                      borderLeft: "3px solid var(--ps-lime)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        flexWrap: "wrap",
+                        marginBottom: 8,
+                      }}
+                    >
+                      <span className="ps-live-pill">{common.live}</span>
+                      {g.field_number !== null ? (
+                        <span className="ps-status-badge ps-status-badge--completed">
+                          {common.field} {g.field_number}
+                        </span>
+                      ) : null}
+                      {g.start_time ? (
+                        <span
+                          style={{
+                            fontSize: 12,
+                            color: "var(--ps-text-muted)",
+                            marginLeft: "auto",
+                          }}
+                        >
+                          {formatDate(g.start_time)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr auto 1fr",
+                        alignItems: "center",
+                        gap: 12,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          justifyContent: "flex-end",
+                        }}
+                      >
+                        <strong>{home?.name ?? "TBD"}</strong>
+                        <span
+                          className="ps-disc ps-disc--sm"
+                          style={{
+                            background: homeColor ?? undefined,
+                            color: "#fff",
+                            borderColor: homeColor ?? undefined,
+                          }}
+                        >
+                          {(home?.name ?? "?").slice(0, 2).toUpperCase()}
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          fontFamily: "var(--ps-font-display)",
+                          fontWeight: 800,
+                          fontSize: 18,
+                          fontVariantNumeric: "tabular-nums",
+                          padding: "4px 10px",
+                          background: "var(--ps-surface-container-high)",
+                          borderRadius: "var(--ps-radius)",
+                        }}
+                      >
+                        {g.home_score} – {g.away_score}
+                      </span>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                        }}
+                      >
+                        <span
+                          className="ps-disc ps-disc--sm"
+                          style={{
+                            background: awayColor ?? undefined,
+                            color: "#fff",
+                            borderColor: awayColor ?? undefined,
+                          }}
+                        >
+                          {(away?.name ?? "?").slice(0, 2).toUpperCase()}
+                        </span>
+                        <strong>{away?.name ?? "TBD"}</strong>
+                      </div>
+                    </div>
+                    <span className="ps-card__footer">{common.score} →</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* ─── Completed fixtures ───────────────────────────────────── */}
+        <section style={{ marginBottom: 32 }}>
+          <div className="ps-section">
+            <span className="ps-section__eyebrow">{common.completed}</span>
+            <h2>{common.completed}</h2>
+            <p>
+              {completed.length}{" "}
+              {completed.length === 1
+                ? common.gamesPlayedShort
+                : common.games}{" "}
+              {common.completed}
+            </p>
+          </div>
+
+          {completedSorted.length === 0 ? (
+            <div className="ps-card" style={{ textAlign: "center" }}>
+              <p style={{ margin: 0 }}>{common.noGames}</p>
+            </div>
+          ) : (
+            <div className="ps-card-list">
+              {completedSorted.map((g) => {
+                const { home, away } = matchTeams(g, teamMap);
+                const homeColor = teamColor(home?.name);
+                const awayColor = teamColor(away?.name);
+                const homeWon = g.home_score > g.away_score;
+                const awayWon = g.away_score > g.home_score;
+                const tied = g.home_score === g.away_score;
+                return (
+                  <Link
+                    key={g.id}
+                    href={`/games/${g.id}`}
+                    className="ps-card ps-card--linked"
+                    style={{
+                      borderLeft: "3px solid var(--ps-text-muted)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        flexWrap: "wrap",
+                        marginBottom: 8,
+                      }}
+                    >
+                      <span className="ps-status-badge ps-status-badge--completed">
+                        {common.completed}
+                      </span>
+                      {g.field_number !== null ? (
+                        <span className="ps-status-badge ps-status-badge--completed">
+                          {common.field} {g.field_number}
+                        </span>
+                      ) : null}
+                      {g.end_time ?? g.start_time ? (
+                        <span
+                          style={{
+                            fontSize: 12,
+                            color: "var(--ps-text-muted)",
+                            marginLeft: "auto",
+                          }}
+                        >
+                          {formatDate(g.end_time ?? g.start_time)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr auto 1fr",
+                        alignItems: "center",
+                        gap: 12,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          justifyContent: "flex-end",
+                          color: homeWon
+                            ? "var(--ps-text)"
+                            : awayWon
+                              ? "var(--ps-text-muted)"
+                              : "var(--ps-text)",
+                          fontWeight: homeWon ? 700 : 500,
+                        }}
+                      >
+                        <strong>{home?.name ?? "TBD"}</strong>
+                        <span
+                          className="ps-disc ps-disc--sm"
+                          style={{
+                            background: homeColor ?? undefined,
+                            color: "#fff",
+                            borderColor: homeColor ?? undefined,
+                          }}
+                        >
+                          {(home?.name ?? "?").slice(0, 2).toUpperCase()}
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          fontFamily: "var(--ps-font-display)",
+                          fontWeight: 800,
+                          fontSize: 18,
+                          fontVariantNumeric: "tabular-nums",
+                          padding: "4px 10px",
+                          background: "var(--ps-surface-container-high)",
+                          borderRadius: "var(--ps-radius)",
+                        }}
+                      >
+                        {g.home_score} – {g.away_score}
+                      </span>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          color: awayWon
+                            ? "var(--ps-text)"
+                            : homeWon
+                              ? "var(--ps-text-muted)"
+                              : "var(--ps-text)",
+                          fontWeight: awayWon ? 700 : 500,
+                        }}
+                      >
+                        <span
+                          className="ps-disc ps-disc--sm"
+                          style={{
+                            background: awayColor ?? undefined,
+                            color: "#fff",
+                            borderColor: awayColor ?? undefined,
+                          }}
+                        >
+                          {(away?.name ?? "?").slice(0, 2).toUpperCase()}
+                        </span>
+                        <strong>{away?.name ?? "TBD"}</strong>
+                      </div>
+                    </div>
+                    <span className="ps-card__footer">
+                      {common.viewTournament} →
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </section>
     </AppShell>
   );

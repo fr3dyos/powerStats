@@ -32,6 +32,7 @@ const { dict } = await getServerLocale();
   const auth = dict.auth;
   const dashboard = dict.adminDashboard;
   const at = dict.adminTeams;
+  const ap = dict.adminPanel;
   const nav = dict.navigation;
 
   // Gather every tournament and its teams so the admin can browse the full
@@ -67,7 +68,15 @@ authLinks={[
                 .replace("{count}", String(tournaments.length))}
             </span>
           </div>
-          <SignOutButton label={auth.signOut} />
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <Link
+              href="/admin/teams/new"
+              className="ps-btn ps-btn--primary"
+            >
+              {at.addTeam}
+            </Link>
+            <SignOutButton label={auth.signOut} />
+          </div>
         </header>
 
         <p className="ps-admin__subtitle">
@@ -121,7 +130,15 @@ authLinks={[
                     {tlist.map((t) => {
                       const accent = teamColor(t.name);
                       return (
-                        <li key={t.id}>
+                        <li
+                          key={t.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 8,
+                          }}
+                        >
                           <Link
                             href={`/teams/${t.id}`}
                             style={{
@@ -131,6 +148,8 @@ authLinks={[
                               color: "var(--ps-text)",
                               textDecoration: "none",
                               fontWeight: 600,
+                              flex: 1,
+                              minWidth: 0,
                             }}
                           >
                             <span
@@ -144,6 +163,18 @@ authLinks={[
                               {t.name.slice(0, 2).toUpperCase()}
                             </span>
                             {t.name}
+                          </Link>
+                          <Link
+                            href={`/admin/teams/${t.id}/edit`}
+                            className="ps-btn ps-btn--ghost"
+                            aria-label={`${ap.editTeam}: ${t.name}`}
+                            title={ap.editTeam}
+                            style={{
+                              fontSize: 12,
+                              padding: "4px 10px",
+                            }}
+                          >
+                            {ap.editTeam}
                           </Link>
                         </li>
                       );

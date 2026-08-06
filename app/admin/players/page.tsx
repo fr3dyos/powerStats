@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -7,16 +6,15 @@ import { SignOutButton } from "@/app/_components/SignOutButton";
 import { getAuthedUser } from "@/utils/supabase/server";
 import { getServerLocale } from "@/utils/i18n-server";
 import {
-  formatPlayerName,
   playersApi,
   teamsApi,
   tournamentsApi,
-  teamColor,
   type Player,
   type Team,
 } from "@/utils/api";
 
 import AddPlayerForm from "./AddPlayerForm";
+import AdminPlayersTable from "./AdminPlayersTable";
 
 export const dynamic = "force-dynamic";
 
@@ -33,11 +31,12 @@ export default async function AdminPlayersPage() {
     redirect("/?error=unauthorized");
   }
 
-const { dict } = await getServerLocale();
+  const { dict } = await getServerLocale();
   const auth = dict.auth;
   const dashboard = dict.adminDashboard;
   const ap = dict.adminPlayers;
   const at = dict.adminTournaments;
+  const ap_panel = dict.adminPanel;
   const nav = dict.navigation;
 
   // Gather every tournament, its teams, and every player on those teams to
@@ -115,72 +114,20 @@ authLinks={[
             <p>{ap.emptyCopy}</p>
           </div>
         ) : (
-          <div className="ps-card" style={{ padding: 0, overflow: "hidden" }}>
-            <table className="ps-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 40 }}>#</th>
-                  <th>{ap.player}</th>
-                  <th>{ap.team}</th>
-                  <th style={{ textAlign: "right" }}>{ap.jersey}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allPlayers
-                  .slice()
-                  .sort((a, b) =>
-                    formatPlayerName(a).localeCompare(formatPlayerName(b)),
-                  )
-                  .map((p, i) => {
-                    const accent = teamColor(p.team?.name);
-                    return (
-                      <tr key={p.id}>
-                        <td className="ps-table__rank">{i + 1}</td>
-                        <td>
-                          <Link
-                            href={`/players/${p.id}`}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 10,
-                              color: "var(--ps-text)",
-                              fontWeight: 600,
-                            }}
-                          >
-                            <span
-                              className="ps-disc ps-disc--sm"
-                              style={{
-                                background: accent ?? undefined,
-                                color: "#fff",
-                                borderColor: accent ?? undefined,
-                              }}
-                            >
-                              {p.team?.name.slice(0, 2).toUpperCase() ?? "—"}
-                            </span>
-                            {formatPlayerName(p)}
-                          </Link>
-                        </td>
-                        <td>
-                          {p.team ? (
-                            <Link
-                              href={`/teams/${p.team.id}`}
-                              style={{ color: "var(--ps-text)" }}
-                            >
-                              {p.team.name}
-                            </Link>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                        <td className="ps-table__num" style={{ textAlign: "right" }}>
-                          {p.jersey_number ?? "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </div>
+          <AdminPlayersTable
+            rows={allPlayers}
+            labels={{
+              player: ap.player,
+              team: ap.team,
+              jersey: ap.jersey,
+              actions: at.actions,
+              searchPlayers: ap.searchPlayers,
+              edit: ap_panel.edit,
+              delete: ap_panel.delete,
+              deleteComingSoon: ap.deleteComingSoon,
+              noPlayerMatches: ap.noPlayerMatches,
+            }}
+          />
         )}
       </section>
     </AppShell>

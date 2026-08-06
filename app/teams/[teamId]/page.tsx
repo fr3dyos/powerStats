@@ -1,7 +1,9 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/app/_components/AppShell";
+import { getAuthedUser } from "@/utils/supabase/server";
 import { getServerLocale } from "@/utils/i18n-server";
 import {
   formatDate,
@@ -18,6 +20,11 @@ export const dynamic = "force-dynamic";
 
 type Params = { teamId: string };
 
+// Roles allowed to see team-level admin actions. Mirrors the same allowlist
+// used on /admin/* routes — kept inline so this page does not silently grant
+// privileges if the helper set changes elsewhere.
+const ADMIN_ACTION_ROLES = new Set(["admin", "scorekeeper"]);
+
 export default async function TeamProfilePage({
   params,
 }: {
@@ -30,9 +37,18 @@ export default async function TeamProfilePage({
   const team = await teamsApi.get(teamId).catch(() => null);
   if (!team) notFound();
 
+  // Read the current viewer's role so the admin actions panel can be gated.
+  // getAuthedUser() never throws on logged-out callers — it returns role: null,
+  // which keeps the panel hidden for public visitors.
+  const cookieStore = await cookies();
+  const { role } = await getAuthedUser(cookieStore);
+  const canAdmin = role !== null && ADMIN_ACTION_ROLES.has(role);
+
   const { dict } = await getServerLocale();
   const t = dict.team;
   const c = dict.common;
+  const ap = dict.adminPanel;
+  const at = dict.adminTournaments;
 
   const [tournament, tournamentTeams] = await Promise.all([
     tournamentsApi.get(team.tournament_id).catch(() => null),
@@ -169,6 +185,48 @@ export default async function TeamProfilePage({
             <span className="ps-stat-tile__label">{t.gamesPlayed}</span>
           </div>
         </div>
+
+        {canAdmin ? (
+          <div className="ps-card" style={{ marginBottom: 24 }}>
+            <span className="ps-section__eyebrow">{ap.adminActions}</span>
+            <h3 style={{ marginTop: 4 }}>{ap.adminActions}</h3>
+            <p
+              style={{
+                color: "var(--ps-text-muted)",
+                fontSize: 13,
+                margin: "0 0 12px",
+              }}
+            >
+              {ap.adminActionsCopy}
+            </p>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              <Link
+                href={`/admin/teams/${teamId}/edit`}
+                className="ps-btn ps-btn--secondary"
+              >
+                {ap.editTeam}
+              </Link>
+              <Link
+                href={`/admin/players?teamId=${teamId}`}
+                className="ps-btn ps-btn--secondary"
+              >
+                {at.addPlayer}
+              </Link>
+              <Link
+                href={`/admin/teams/${teamId}/logo`}
+                className="ps-btn ps-btn--secondary"
+              >
+                {ap.uploadLogo}
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         <div className="ps-split ps-split--1-2">
           <div className="ps-card">

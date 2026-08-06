@@ -1,7 +1,9 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/app/_components/AppShell";
+import { getAuthedUser } from "@/utils/supabase/server";
 import { getServerLocale } from "@/utils/i18n-server";
 import {
   formatPlayerName,
@@ -13,6 +15,11 @@ import {
 export const dynamic = "force-dynamic";
 
 type Params = { playerId: string };
+
+// Roles allowed to see player-level admin actions. Mirrors the same allowlist
+// used on /admin/* routes — kept inline so this page does not silently grant
+// privileges if the helper set changes elsewhere.
+const ADMIN_ACTION_ROLES = new Set(["admin", "scorekeeper"]);
 
 /** Render a Stitch-style progress ring for a percentage value. */
 function ProgressRing({
@@ -97,6 +104,20 @@ export default async function PlayerProfilePage({
   const { dict } = await getServerLocale();
   const p = dict.player;
   const c = dict.common;
+  const ap = dict.adminPanel;
+
+  // Read the current viewer's role so the admin actions card can be gated.
+  // getAuthedUser() never throws on logged-out callers — it returns role: null,
+  // which keeps the card hidden for public visitors.
+  const cookieStore = await cookies();
+  const { role } = await getAuthedUser(cookieStore);
+  const canAdmin = role !== null && ADMIN_ACTION_ROLES.has(role);
+
+  // Defensive read of the optional photo URL. The backend may add a
+  // `photo_url` field at any point; the shared Player type does not declare
+  // it, so we narrow the cast at the access site rather than widening the
+  // type for every caller.
+  const photoUrl = (player as { photo_url?: string | null }).photo_url ?? null;
 
   const team = await teamsApi.get(player.team_id).catch(() => null);
   const accent = teamColor(team?.name);
@@ -135,16 +156,33 @@ authLinks={[
             marginBottom: 24,
           }}
         >
-          <span
-            className="ps-disc ps-disc--lg"
-            style={{
-              background: accent ?? undefined,
-              color: "#fff",
-              borderColor: accent ?? undefined,
-            }}
-          >
-            {player.jersey_number ?? "?"}
-          </span>
+          {photoUrl ? (
+            <img
+              src={photoUrl}
+              alt={formatPlayerName(player)}
+              width={64}
+              height={64}
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: "50%",
+                objectFit: "cover",
+                border: `2px solid ${accent ?? "var(--ps-border)"}`,
+                background: "var(--ps-surface-container-high)",
+              }}
+            />
+          ) : (
+            <span
+              className="ps-disc ps-disc--lg"
+              style={{
+                background: accent ?? undefined,
+                color: "#fff",
+                borderColor: accent ?? undefined,
+              }}
+            >
+              {player.jersey_number ?? "?"}
+            </span>
+          )}
           <div>
 <span className="ps-section__eyebrow">
               {team?.name ?? p.title} · #{player.jersey_number ?? "—"}
@@ -158,6 +196,48 @@ authLinks={[
             </p>
           </div>
         </div>
+
+        {canAdmin ? (
+          <div className="ps-card" style={{ marginBottom: 24 }}>
+            <span className="ps-section__eyebrow">{ap.adminActions}</span>
+            <h3 style={{ marginTop: 4 }}>{ap.adminActions}</h3>
+            <p
+              style={{
+                color: "var(--ps-text-muted)",
+                fontSize: 13,
+                margin: "0 0 12px",
+              }}
+            >
+              {ap.adminActionsCopy}
+            </p>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              <Link
+                href={`/admin/players/${playerId}/edit`}
+                className="ps-btn ps-btn--secondary"
+              >
+                {ap.editPlayer}
+              </Link>
+              <Link
+                href={`/admin/players/${playerId}/transfer`}
+                className="ps-btn ps-btn--secondary"
+              >
+                {ap.transferPlayer}
+              </Link>
+              <Link
+                href={`/admin/players/${playerId}/photo`}
+                className="ps-btn ps-btn--secondary"
+              >
+                {ap.uploadPhoto}
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         <div className="ps-split ps-split--2-1">
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

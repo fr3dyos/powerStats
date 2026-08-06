@@ -6,7 +6,12 @@ import { AppShell } from "@/app/_components/AppShell";
 import { SignOutButton } from "@/app/_components/SignOutButton";
 import { getServerLocale } from "@/utils/i18n-server";
 import { getAuthedUser } from "@/utils/supabase/server";
-import { gamesApi, tournamentsApi } from "@/utils/api";
+import {
+  formatDate,
+  gamesApi,
+  tournamentsApi,
+  type Game,
+} from "@/utils/api";
 
 // Force this route to be evaluated per-request; the auth context must
 // never be cached.
@@ -66,6 +71,43 @@ const { dict } = await getServerLocale();
     }
     return "/tournaments";
   })();
+
+  // Widget data: sample recent tournaments, map team ids to names, then
+  // slice the two small lists shown below the tiles.
+  const teamName = new Map<number, string>();
+  const unscored: Game[] = [];
+  const completed: Game[] = [];
+  try {
+    const tournaments = await tournamentsApi.list(20);
+    for (const t of tournaments) {
+      const [tour, games] = await Promise.all([
+        tournamentsApi.get(t.id).catch(() => null),
+        gamesApi.listByTournament(t.id).catch(() => []),
+      ]);
+      for (const team of tour?.teams ?? []) {
+        if (!teamName.has(team.id)) teamName.set(team.id, team.name);
+      }
+      for (const g of games) {
+        (g.is_completed ? completed : unscored).push(g);
+      }
+    }
+  } catch {
+    /* fall through to empty widgets */
+  }
+
+  const sortTime = (g: Game, key: "start_time" | "end_time") => {
+    const v = g[key] ? Date.parse(g[key]) : 0;
+    return Number.isFinite(v) ? v : 0;
+  };
+
+  const topUnscored = [...unscored]
+    .sort((a, b) => sortTime(b, "start_time") - sortTime(a, "start_time"))
+    .slice(0, 10);
+  const topCompleted = [...completed]
+    .sort((a, b) => sortTime(b, "end_time") - sortTime(a, "end_time"))
+    .slice(0, 10);
+
+  const teamNameFor = (id: number) => teamName.get(id) ?? "—";
 
   // Each tile links to the surface it actually owns. Scorekeepers get
   // read-only views plus the live-scoring console; admins get the same
@@ -160,6 +202,135 @@ const { dict } = await getServerLocale();
               <span className="ps-card__footer">{tile.footer}</span>
             </Link>
           ))}
+        </div>
+
+        <div
+          style={{
+            marginTop: 32,
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+            gap: 16,
+            alignItems: "start",
+          }}
+        >
+          <div>
+            <div className="ps-section__eyebrow">{dashboard.unscoredGames}</div>
+            <div className="ps-card" style={{ marginTop: 8, minHeight: 0 }}>
+              {topUnscored.length === 0 ? (
+                <p style={{ color: "var(--ps-text-muted)", fontSize: 13, margin: 0 }}>
+                  {dashboard.unscoredGamesEmpty}
+                </p>
+              ) : (
+                <ul
+                  style={{
+                    listStyle: "none",
+                    margin: 0,
+                    padding: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  {topUnscored.map((g) => {
+                    const home = teamNameFor(g.home_team_id);
+                    const away = teamNameFor(g.away_team_id);
+                    return (
+                      <li key={g.id}>
+                        <Link
+                          href={`/admin/games/${g.id}/score`}
+                          className="ps-pill"
+                          style={{
+                            textDecoration: "none",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 8,
+                            width: "100%",
+                            padding: "10px 12px",
+                            borderRadius: "var(--ps-radius)",
+                            background: "var(--ps-surface-container-low)",
+                          }}
+                        >
+                          <span style={{ color: "var(--ps-text)" }}>
+                            {home} vs {away}
+                          </span>
+                          <span
+                            style={{
+                              color: "var(--ps-primary-container)",
+                              fontWeight: 800,
+                            }}
+                          >
+                            {dashboard.score}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <div className="ps-section__eyebrow">{dashboard.recentlyCompleted}</div>
+            <div className="ps-card" style={{ marginTop: 8, minHeight: 0 }}>
+              {topCompleted.length === 0 ? (
+                <p style={{ color: "var(--ps-text-muted)", fontSize: 13, margin: 0 }}>
+                  {dashboard.recentlyCompletedEmpty}
+                </p>
+              ) : (
+                <ul
+                  style={{
+                    listStyle: "none",
+                    margin: 0,
+                    padding: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  {topCompleted.map((g) => {
+                    const home = teamNameFor(g.home_team_id);
+                    const away = teamNameFor(g.away_team_id);
+                    return (
+                      <li key={g.id}>
+                        <Link
+                          href={`/games/${g.id}`}
+                          className="ps-pill"
+                          style={{
+                            textDecoration: "none",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 8,
+                            width: "100%",
+                            padding: "10px 12px",
+                            borderRadius: "var(--ps-radius)",
+                            background: "var(--ps-surface-container-low)",
+                          }}
+                        >
+                          <span style={{ color: "var(--ps-text)" }}>
+                            {home}
+                            <strong> {g.home_score}–{g.away_score} </strong>
+                            {away}
+                          </span>
+                          <span
+                            style={{
+                              color: "var(--ps-secondary)",
+                              fontWeight: 800,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {formatDate(g.end_time ?? g.start_time)}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
         </div>
       </section>
     </AppShell>
