@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/app/_components/AppShell";
+import Leaderboard, { type StatRow } from "./_components/Leaderboard";
 import {
-  formatPlayerName,
   gamesApi,
   playersApi,
   teamsApi,
@@ -18,11 +18,6 @@ import { getServerLocale } from "@/utils/i18n-server";
 export const dynamic = "force-dynamic";
 
 type Params = { id: string };
-
-type StatRow = {
-  player: Player & { team: Team | undefined };
-  value: number;
-};
 
 export default async function TournamentPublicStatsPage({
   params,
@@ -69,22 +64,16 @@ const { dict } = await getServerLocale();
     }),
   );
 
-  const goalLeaders: StatRow[] = statsRows
+const goalLeaders: StatRow[] = statsRows
     .filter((r) => r.stats && r.stats.goals > 0)
-    .sort((a, b) => (b.stats!.goals - a.stats!.goals))
-    .slice(0, 5)
     .map((r) => ({ player: r.player, value: r.stats!.goals }));
 
   const assistLeaders: StatRow[] = statsRows
     .filter((r) => r.stats && r.stats.assists > 0)
-    .sort((a, b) => (b.stats!.assists - a.stats!.assists))
-    .slice(0, 5)
     .map((r) => ({ player: r.player, value: r.stats!.assists }));
 
   const defenseLeaders: StatRow[] = statsRows
     .filter((r) => r.stats && r.stats.defenses > 0)
-    .sort((a, b) => (b.stats!.defenses - a.stats!.defenses))
-    .slice(0, 5)
     .map((r) => ({ player: r.player, value: r.stats!.defenses }));
 
   const games: Game[] = await gamesApi.listByTournament(id).catch(() => []);
@@ -96,10 +85,10 @@ const { dict } = await getServerLocale();
 
   return (
 <AppShell
-      brandSubtitle={`${tournament.name} · ${pub.title}`}
+      brandSubtitle={`${tournament.name} · ${trn.publicStats}`}
       footerText={common.footer}
       authLinks={[
-        { label: common.backToTournament, href: `/tournaments/${id}`, variant: "ghost" },
+        { label: trn.backToTournament, href: `/tournaments/${id}`, variant: "ghost" },
         { label: nav.rankings, href: "/rankings", variant: "ghost" },
       ]}
     >
@@ -150,16 +139,40 @@ const { dict } = await getServerLocale();
               title={team.topScorers}
               rows={goalLeaders}
               valueSuffix={pub.goals}
+              filename={`${tournament.name}-goals`}
+              labels={{
+                csv: pub.exportCsv,
+                sort: pub.sortToggle,
+                rank: pub.csvRank,
+                player: pub.csvPlayer,
+                team: pub.csvTeam,
+              }}
             />
             <Leaderboard
               title={team.topAssists}
               rows={assistLeaders}
               valueSuffix={pub.assists}
+              filename={`${tournament.name}-assists`}
+              labels={{
+                csv: pub.exportCsv,
+                sort: pub.sortToggle,
+                rank: pub.csvRank,
+                player: pub.csvPlayer,
+                team: pub.csvTeam,
+              }}
             />
             <Leaderboard
               title={team.topDefenses}
               rows={defenseLeaders}
               valueSuffix={pub.defenses}
+              filename={`${tournament.name}-defenses`}
+              labels={{
+                csv: pub.exportCsv,
+                sort: pub.sortToggle,
+                rank: pub.csvRank,
+                player: pub.csvPlayer,
+                team: pub.csvTeam,
+              }}
             />
           </div>
 
@@ -250,79 +263,7 @@ const { dict } = await getServerLocale();
             </div>
           </div>
         </div>
-      </section>
+</section>
     </AppShell>
-  );
-}
-
-function Leaderboard({
-  title,
-  rows,
-  valueSuffix,
-}: {
-  title: string;
-  rows: StatRow[];
-  valueSuffix: string;
-}) {
-  return (
-    <div className="ps-card">
-      <div className="ps-leaderboard">
-        <h3 className="ps-leaderboard__title">{title}</h3>
-        {rows.length === 0 ? (
-          <p style={{ color: "var(--ps-text-muted)", fontSize: 13, margin: 0 }}>
-            {valueSuffix}
-          </p>
-        ) : (
-          rows.map((row, i) => (
-            <Link
-              key={row.player.id}
-              href={`/players/${row.player.id}`}
-              className="ps-leaderboard-row"
-              style={{ textDecoration: "none" }}
-            >
-              <span
-                className={
-                  i === 0
-                    ? "ps-leaderboard-row__rank ps-leaderboard-row__rank--top"
-                    : "ps-leaderboard-row__rank"
-                }
-              >
-                {i + 1}
-              </span>
-              <span
-                className="ps-disc ps-disc--sm"
-                style={{
-                  background:
-                    teamColor(row.player.team?.name) ?? undefined,
-                  color: "#fff",
-                  borderColor:
-                    teamColor(row.player.team?.name) ?? undefined,
-                }}
-              >
-                {row.player.team?.name.slice(0, 2).toUpperCase() ?? "—"}
-              </span>
-              <span>
-                <span className="ps-leaderboard-row__name">
-                  {formatPlayerName(row.player)}
-                </span>
-                <span className="ps-leaderboard-row__meta">
-                  {" "}
-                  · {row.player.team?.name ?? "—"}
-                </span>
-              </span>
-              <span
-                className={
-                  i === 0
-                    ? "ps-leaderboard-row__value ps-leaderboard-row__value--accent"
-                    : "ps-leaderboard-row__value"
-                }
-              >
-                {row.value}
-              </span>
-            </Link>
-          ))
-        )}
-      </div>
-    </div>
   );
 }

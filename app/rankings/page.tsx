@@ -17,18 +17,44 @@ import { getServerLocale } from "@/utils/i18n-server";
 
 export const revalidate = 60;
 
-export default async function RankingsPage() {
+type SearchParams = Promise<{ year?: string }>;
+
+export default async function RankingsPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const { dict } = await getServerLocale();
   const common = dict.common;
   const rk = dict.rankings;
   const nav = dict.navigation;
 
+  const { year } = await searchParams;
+
   const tournaments = await tournamentsApi.list(50).catch(() => []);
 
-  // For every tournament, compute its standings. We do this in parallel
+  // Derive the set of years from tournament start dates (for the filter UI).
+  const years = Array.from(
+    new Set(
+      tournaments
+        .map((t) => new Date(t.start_date).getFullYear())
+        .filter((y) => Number.isFinite(y)),
+    ),
+  ).sort((a, b) => b - a);
+
+  const selectedYear = year ? Number(year) : null;
+  const activeFilter =
+    selectedYear !== null && Number.isFinite(selectedYear) && years.includes(selectedYear)
+      ? selectedYear
+      : null;
+  const filteredTournaments = activeFilter === null
+    ? tournaments
+    : tournaments.filter((t) => new Date(t.start_date).getFullYear() === activeFilter);
+
+// For every tournament, compute its standings. We do this in parallel
   // and only fetch games per tournament.
   const perTournament = await Promise.all(
-    tournaments.map(async (t) => {
+    filteredTournaments.map(async (t) => {
       const [teams, games] = await Promise.all([
         teamsApi.listByTournament(t.id).catch(() => []),
         gamesApi.listByTournament(t.id).catch(() => []),
@@ -122,10 +148,52 @@ const assistRanking = [...playerGoalTotals.values()]
       ]}
     >
       <section className="ps-admin">
-        <div className="ps-section">
+<div className="ps-section">
           <span className="ps-section__eyebrow">{rk.eyebrow}</span>
           <h1>{rk.title}</h1>
           <p>{rk.subtitle}</p>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap",
+            marginBottom: 24,
+          }}
+        >
+          <span
+            className="ps-section__eyebrow"
+            style={{ marginRight: 4 }}
+          >
+            {rk.filterYear}
+          </span>
+          <Link
+            href="/rankings"
+            className={
+              activeFilter === null
+                ? "ps-status-badge ps-status-badge--active"
+                : "ps-status-badge ps-status-badge--pending"
+            }
+            style={{ textDecoration: "none" }}
+          >
+            {rk.filterAllEvents}
+          </Link>
+          {years.map((y) => (
+            <Link
+              key={y}
+              href={`/rankings?year=${y}`}
+              className={
+                activeFilter === y
+                  ? "ps-status-badge ps-status-badge--active"
+                  : "ps-status-badge ps-status-badge--pending"
+              }
+              style={{ textDecoration: "none" }}
+            >
+              {y}
+            </Link>
+          ))}
         </div>
 
         <div className="ps-split ps-split--1-2">
