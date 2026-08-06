@@ -8,7 +8,7 @@ import {
   type GameEvent,
   type Player,
   type Team,
-} from "@/utils/api";
+} from "@/utils/api-shared";
 
 type Props = {
   initialGame: Game;

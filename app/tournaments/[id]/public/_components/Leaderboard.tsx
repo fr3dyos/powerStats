@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { formatPlayerName, teamColor, type Player, type Team } from "@/utils/api";
+import { formatPlayerName, teamColor, type Player, type Team } from "@/utils/api-shared";
 
 export type StatRow = {
   player: Player & { team: Team | undefined };

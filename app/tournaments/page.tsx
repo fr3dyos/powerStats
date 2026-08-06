@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { AppShell } from "@/app/_components/AppShell";
 import {
   gamesApi,
@@ -76,8 +78,26 @@ export default async function TournamentsListPage() {
       <section className="ps-admin">
         <div className="ps-section">
           <span className="ps-section__eyebrow">{trn.browse}</span>
-          <h1>{trn.title}</h1>
-          <p>{trn.subtitle}</p>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <h1>{trn.title}</h1>
+              <p>{trn.subtitle}</p>
+            </div>
+            <Link
+              href="/admin/tournaments/new"
+              className="ps-btn ps-btn--primary"
+            >
+              New tournament
+            </Link>
+          </div>
         </div>
 
         {tournaments.length === 0 ? (

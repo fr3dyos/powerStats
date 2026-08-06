@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { formatDate, formatDateRange, type Game, type Team, type Tournament } from "@/utils/api";
+import { formatDate, formatDateRange, type Game, type Team, type Tournament } from "@/utils/api-shared";
 
 type Row = {
   tournament: Tournament;

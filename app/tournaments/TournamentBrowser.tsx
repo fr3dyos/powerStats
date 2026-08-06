@@ -7,7 +7,7 @@ import {
   formatDateRange,
   teamColor,
   type Tournament,
-} from "@/utils/api";
+} from "@/utils/api-shared";
 
 export type TournamentStatus = "upcoming" | "live" | "completed";
 

@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 
 import { createPlayerAction } from "./_actions";
-import type { Team } from "@/utils/api";
+import type { Team } from "@/utils/api-shared";
 
 type AddPlayerFormProps = {
   teams: Team[];
