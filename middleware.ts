@@ -23,7 +23,16 @@ const PROTECTED_PREFIXES = [
   "/tournaments",
 ];
 
+/** Public auth flows that live under protected prefixes must stay reachable
+ *  while anonymous — otherwise nobody can ever sign in. */
+const AUTH_PATHS = new Set([
+  "/admin/login",
+  "/forgot-password",
+  "/reset-password",
+]);
+
 const isProtected = (pathname: string): boolean =>
+  !AUTH_PATHS.has(pathname) &&
   PROTECTED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
