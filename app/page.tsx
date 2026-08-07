@@ -15,7 +15,12 @@ export default async function HomePage({
   const { dict } = await getServerLocale();
   const params = (await Promise.resolve(searchParams)) ?? {};
   const errorParam = Array.isArray(params.error) ? params.error[0] : params.error;
-  const unauthorized = errorParam === "unauthorized";
+  const errorMessage =
+    errorParam === "unauthorized"
+      ? dict.auth.unauthorized
+      : errorParam === "auth"
+        ? dict.auth.signInRequired
+        : null;
 
   const home = dict.home;
   const nav = dict.navigation;
@@ -39,14 +44,14 @@ export default async function HomePage({
           <h1>{home.tagline}</h1>
           <p className="lead">{home.lead}</p>
 
-          {unauthorized ? (
+          {errorMessage ? (
             <div
               role="alert"
               aria-live="polite"
               className="ps-status ps-status--error"
               style={{ maxWidth: 520, margin: "0 auto 20px" }}
             >
-              {dict.auth.unauthorized}
+              {errorMessage}
             </div>
           ) : null}
 

@@ -45,10 +45,10 @@ export async function middleware(request: NextRequest) {
   // Refresh the Supabase session so downstream server components see a
   // valid cookie. We need this BEFORE the auth check below.
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   let isAuthed = false;
-  if (supabaseUrl && supabaseAnonKey) {
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+  if (supabaseUrl && supabasePublishableKey) {
+    const supabase = createServerClient(supabaseUrl, supabasePublishableKey, {
       cookies: {
         get: (name: string) => request.cookies.get(name)?.value,
         set: (name: string, value: string, options: CookieOptions) => {
