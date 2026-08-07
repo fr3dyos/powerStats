@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -23,21 +24,30 @@ type ThemeContextValue = {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-/** Read the initial theme from the cookie (set by the inline no-flash script). */
-function readInitialTheme(): Theme {
-  if (typeof document === "undefined") return "dark";
-  const match = document.cookie.match(
-    new RegExp(`(?:^|; )${THEME_COOKIE}=([^;]*)`),
-  );
-  const value = match?.[1];
-  return value === "light" ? "light" : "dark";
-}
-
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(readInitialTheme);
+  // Start from the same value the server renders ("dark") so the first
+  // client render matches the server HTML. The persisted theme is read in a
+  // mount effect — never during render — to avoid hydration mismatches.
+  const [theme, setThemeState] = useState<Theme>("dark");
+  const hasApplied = useRef(false);
 
-  // Apply the theme attribute + color-scheme and persist it.
+  // On mount, adopt the theme the inline no-flash script already applied,
+  // so light-theme users don't get stuck in dark mode.
   useEffect(() => {
+    const match = document.cookie.match(
+      new RegExp(`(?:^|; )${THEME_COOKIE}=([^;]*)`),
+    );
+    const value = match?.[1];
+    if (value === "light" || value === "dark") setThemeState(value);
+  }, []);
+
+  // Apply the theme attribute + color-scheme and persist it. The initial
+  // state is already applied by the no-flash script, so skip the first run.
+  useEffect(() => {
+    if (!hasApplied.current) {
+      hasApplied.current = true;
+      return;
+    }
     document.documentElement.setAttribute("data-theme", theme);
     document.documentElement.style.colorScheme = theme;
     document.cookie = `${THEME_COOKIE}=${theme}; path=/; max-age=31536000; samesite=lax`;
