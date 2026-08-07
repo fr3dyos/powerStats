@@ -80,6 +80,7 @@ const { dict } = await getServerLocale();
   const common = dict.common;
   const brk = dict.bracket;
   const nav = dict.navigation;
+  const trn = dict.tournament;
   const matchDict = dict.match;
 
   const { user, role } = await getAuthedUser(await cookies());
@@ -109,7 +110,7 @@ const { dict } = await getServerLocale();
       brandSubtitle={`${tournament.name} · ${brk.title}`}
       footerText={common.footer}
       authLinks={[
-        { label: common.backToTournament, href: `/tournaments/${id}`, variant: "ghost" },
+        { label: trn.backToTournament, href: `/tournaments/${id}`, variant: "ghost" },
         { label: nav.rankings, href: "/rankings", variant: "ghost" },
       ]}
     >
@@ -302,7 +303,7 @@ return (
               className="ps-btn"
               style={{ marginTop: 12 }}
             >
-              ← {common.backToTournament}
+              ← {trn.backToTournament}
             </Link>
           </div>
         ) : null}

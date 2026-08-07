@@ -49,7 +49,9 @@ export default async function TournamentDetailPage({
 
   if (!tournament) notFound();
 
-  const teamMap = new Map<number, Team>(teams.map((t) => [t.id, t]));
+  const teamMap = new Map<number, Team>(
+    teams.map((t) => [t.id, t] as const),
+  );
   const standings = computeStandings(teams, games);
   const completed = games.filter((g) => g.is_completed);
   const live = games.filter((g) => !g.is_completed);

@@ -142,7 +142,7 @@ export default async function PlayerProfilePage({
 <AppShell
       brandSubtitle={`${formatPlayerName(player)} · ${p.profile}`}
 authLinks={[
-        { label: p.backToTeam ?? p.profile, href: `/teams/${player.team_id}`, variant: "ghost" },
+        { label: p.profile, href: `/teams/${player.team_id}`, variant: "ghost" },
 { label: dict.navigation.rankings, href: "/rankings", variant: "ghost" },
       ]}
     >

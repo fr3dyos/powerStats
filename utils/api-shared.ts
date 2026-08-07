@@ -95,6 +95,23 @@ export type PlayerTournamentStats = {
   updated_at: string | null;
 };
 
+export type PhaseType = "round_robin" | "bracket";
+
+export type PhaseStatus = "pending" | "in_progress" | "completed";
+
+export type Phase = {
+  id: number;
+  tournament_id: number;
+  name: string;
+  phase_order: number;
+  phase_type: PhaseType;
+  status: PhaseStatus;
+  status_mode: string;
+  config: Record<string, unknown>;
+  created_at: string;
+  updated_at: string | null;
+};
+
 /** Compute a Round-Robin "W-L / Diff / GF / GA" standings table. */
 export function computeStandings(teams: Team[], games: Game[]) {
   const rows = new Map<

@@ -64,9 +64,9 @@ function AdminLoginForm() {
   useEffect(() => {
     const message = searchParams?.get("message");
     if (message === "password-updated") {
-      setStatus({ kind: "success", message: dict.passwordUpdated });
+      setStatus({ kind: "success", message: dict.auth.passwordUpdated });
     }
-  }, [searchParams, dict.passwordUpdated]);
+  }, [searchParams, dict.auth.passwordUpdated]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

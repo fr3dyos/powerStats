@@ -6,11 +6,14 @@ import { AppShell } from "@/app/_components/AppShell";
 import { SignOutButton } from "@/app/_components/SignOutButton";
 import { getAuthedUser } from "@/utils/supabase/server";
 import { getServerLocale } from "@/utils/i18n-server";
-import { tournamentsApi } from "@/utils/api";
+import {
+  tournamentsApi,
+  formatDate,
+  type Tournament,
+  type Phase,
+} from "@/utils/api";
+import { TournamentEditForm } from "./_components/TournamentEditForm";
 
-// The edit form itself isn't wired up yet; the page exists so the admin
-// toolbar's "Edit selected" button (and any per-row Edit link) has a real
-// destination.
 export const dynamic = "force-dynamic";
 
 const ALLOWED_ROLES = new Set(["admin", "scorekeeper"]);
@@ -39,6 +42,19 @@ export default async function EditTournamentPage({
   const tournament = await tournamentsApi.get(id).catch(() => null);
   if (!tournament) notFound();
 
+  // Fetch phases for this tournament
+  const phases = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/tournaments/${id}/phases`,
+    {
+      headers: {
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    }
+  )
+    .then((res) => res.json())
+    .catch(() => [] as Phase[]);
+
   const { dict } = await getServerLocale();
   const auth = dict.auth;
   const dashboard = dict.adminDashboard;
@@ -56,34 +72,53 @@ export default async function EditTournamentPage({
       <section className="ps-admin">
         <header className="ps-admin__header">
           <div className="ps-admin__title">
-            <h1>{ap.edit} — {tournament.name}</h1>
+            <h1>
+              {ap.edit}: {tournament.name}
+            </h1>
             <span className="ps-status-pill" aria-live="polite">
-              {dashboard.comingSoon}
+              {role === "admin" ? auth.adminAccessVerified : dashboard.scorekeeperAccess}
             </span>
           </div>
           <SignOutButton label={auth.signOut} />
         </header>
 
         <p className="ps-admin__subtitle">
-          {at.emptyCopy}
+          {tournament.location || "No location set"} · {formatDate(tournament.start_date)} -{" "}
+          {formatDate(tournament.end_date)}
         </p>
 
-        <div className="ps-card" style={{ marginTop: 16 }}>
-          <h2 style={{ fontSize: 18, marginTop: 0 }}>
-            {ap.edit}: {tournament.name}
-          </h2>
-          <p style={{ color: "var(--ps-text-muted)", marginBottom: 16 }}>
-            {dashboard.comingSoon}. This form will let you update the
-            tournament name, date range, format, and field count.
-          </p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Link
-              href="/admin/tournaments"
-              className="ps-btn ps-btn--ghost"
-            >
-              {at.cancel}
-            </Link>
-          </div>
+        <TournamentEditForm
+          tournament={tournament}
+          phases={phases}
+          labels={{
+            name: at.name,
+            location: "Location",
+            description: "Description",
+            startDate: "Start Date",
+            endDate: "End Date",
+            save: at.save,
+            cancel: at.cancel,
+            phases: at.phases,
+            addPhase: "Add Phase",
+            phaseName: "Phase Name",
+            phaseType: "Type",
+            phaseStatus: "Status",
+            phaseRoundRobin: at.phaseRoundRobin,
+            phaseBracket: at.phaseBracket,
+            phasePending: at.phasePending,
+            phaseInProgress: at.phaseInProgress,
+            phaseCompleted: at.phaseCompleted,
+            generateRoundRobin: ap.generateRoundRobin,
+            generateBracket: ap.generateBracket,
+            viewStandings: "View Standings",
+          }}
+          canEdit={role === "admin"}
+        />
+
+        <div style={{ marginTop: 24 }}>
+          <Link href="/admin/tournaments" className="ps-btn ps-btn--ghost">
+            ← {at.cancel}
+          </Link>
         </div>
       </section>
     </AppShell>
