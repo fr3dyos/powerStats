@@ -9,6 +9,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { teamColor, type Team } from "@/utils/api-shared";
+import { mapWithConcurrency } from "@/utils/async";
+import { AppShell } from "@/app/_components/AppShell";
 
 // --- Lightweight client fetch helper ---------------------------------
 // Talks to the Next.js `/api/*` proxy routes. Each returns parsed JSON
@@ -46,44 +48,75 @@ type TeamWithStats = Team & {
 
 export default function TeamsPage() {
   const [teams, setTeams] = useState<TeamWithStats[]>([]);
+  const [tournaments, setTournaments] = useState<Array<{ id: number; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
 
-  // Inline create form state — kept local; no global form library needed
-  // for a placeholder that will be replaced by a server action later.
+  // Inline create form state
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newLeague, setNewLeague] = useState("");
+  const [newTournamentId, setNewTournamentId] = useState<number>(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // `listAll` is not implemented yet; fall back to fetching each
-      // tournament's teams until the bulk endpoint ships.
-      const tournaments = await api<Array<{ id: number }>>(
+      const tourList = await api<Array<{ id: number; name: string }>>(
         "/api/tournaments",
       );
-      const lists = await Promise.all(
-        tournaments.map((t) =>
-          api<Team[]>(`/api/teams?tournament_id=${t.id}`).catch(() => []),
-        ),
+      setTournaments(tourList);
+
+      // Fetch teams and compute stats from games
+      const lists = await mapWithConcurrency(tourList, 4, (t) =>
+        api<Team[]>(`/api/teams?tournament_id=${t.id}`).catch(() => []),
       );
-      const flat = lists.flat().map<TeamWithStats>((t) => ({
-        ...t,
-        league: null,
-        wins: 0,
-        losses: 0,
-        power_score: 0,
-      }));
+
+      // Fetch games per tournament to compute stats
+      const gameLists = await mapWithConcurrency(tourList, 4, (t) =>
+        api<Array<{ home_team_id: number; away_team_id: number; home_score: number; away_score: number; is_completed: boolean }>>(
+          `/api/games?tournament_id=${t.id}`,
+        ).catch(() => []),
+      );
+
+      // Build stats map: teamId -> { wins, losses, power_score }
+      const statsMap = new Map<number, { wins: number; losses: number; pf: number; pa: number }>();
+      for (const games of gameLists) {
+        for (const g of games) {
+          if (!g.is_completed) continue;
+          const h = statsMap.get(g.home_team_id) ?? { wins: 0, losses: 0, pf: 0, pa: 0 };
+          const a = statsMap.get(g.away_team_id) ?? { wins: 0, losses: 0, pf: 0, pa: 0 };
+          h.pf += g.home_score; h.pa += g.away_score;
+          a.pf += g.away_score; a.pa += g.home_score;
+          if (g.home_score > g.away_score) { h.wins++; a.losses++; }
+          else if (g.away_score > g.home_score) { a.wins++; h.losses++; }
+          statsMap.set(g.home_team_id, h);
+          statsMap.set(g.away_team_id, a);
+        }
+      }
+
+      const flat = lists.flat().map<TeamWithStats>((t) => {
+        const s = statsMap.get(t.id) ?? { wins: 0, losses: 0, pf: 0, pa: 0 };
+        return {
+          ...t,
+          league: null,
+          wins: s.wins,
+          losses: s.losses,
+          power_score: s.wins * 2 + (s.pf - s.pa) / 10,
+        };
+      });
       setTeams(flat);
+
+      // Default new team tournament to first one
+      if (tourList.length > 0 && newTournamentId === 0) {
+        setNewTournamentId(tourList[0].id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load teams");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [newTournamentId]);
 
   useEffect(() => {
     void load();
@@ -92,27 +125,26 @@ export default function TeamsPage() {
   const createTeam = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      if (!newName.trim()) return;
+      if (!newName.trim() || !newTournamentId) return;
       try {
         const created = await api<Team>("/api/teams", {
           method: "POST",
           body: JSON.stringify({
             name: newName.trim(),
-            tournament_id: 1, // placeholder: until the form gets a picker
+            tournament_id: newTournamentId,
           }),
         });
         setTeams((prev) => [
-          { ...created, wins: 0, losses: 0, power_score: 0 },
+          { ...created, league: null, wins: 0, losses: 0, power_score: 0 },
           ...prev,
         ]);
         setNewName("");
-        setNewLeague("");
         setShowNew(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Create failed");
       }
     },
-    [newName, newLeague],
+    [newName, newTournamentId],
   );
 
   const deleteTeam = useCallback(async (id: number) => {
@@ -140,7 +172,8 @@ export default function TeamsPage() {
   );
 
   return (
-    <main
+    <AppShell footerText="built for Ultimate.">
+    <section
       className="ps-container"
       style={{ maxWidth: 960, margin: "0 auto", padding: "32px 20px" }}
     >
@@ -178,14 +211,18 @@ export default function TeamsPage() {
             required
             style={{ flex: "1 1 200px" }}
           />
-          <input
-            type="text"
+          <select
             className="ps-input"
-            placeholder="League (optional)"
-            value={newLeague}
-            onChange={(e) => setNewLeague(e.target.value)}
-            style={{ flex: "1 1 160px" }}
-          />
+            value={newTournamentId}
+            onChange={(e) => setNewTournamentId(Number(e.target.value))}
+            required
+            style={{ flex: "1 1 180px" }}
+          >
+            <option value={0} disabled>Select tournament…</option>
+            {tournaments.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
           <button type="submit" className="ps-btn ps-btn--primary">
             Create
           </button>
@@ -290,6 +327,7 @@ export default function TeamsPage() {
           </table>
         </div>
       )}
-    </main>
+    </section>
+    </AppShell>
   );
 }

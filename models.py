@@ -184,6 +184,12 @@ class Game(Base):
     score_limit = Column(Integer)  # points to win
     field_number = Column(Integer)
     is_completed = Column(Boolean, default=False)
+    # Live status + game clock (scorekeeper console).
+    is_live = Column(Boolean, default=False)
+    clock_running = Column(Boolean, default=False)
+    clock_started_at = Column(DateTime(timezone=True), nullable=True)
+    # Accumulated elapsed seconds from completed (paused) runs of the clock.
+    clock_elapsed = Column(Integer, default=0)
     # Phase / group attribution (optional — games may also be created without
     # a phase for ad-hoc / friendly games).
     phase_id = Column(Integer, ForeignKey("phases.id"), nullable=True)

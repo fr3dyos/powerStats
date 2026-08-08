@@ -20,7 +20,6 @@ const EVENT_LABEL_KEY: Record<GameEvent["event_type"], string> = {
   defense: "defense",
   timeout: "timeout",
   half: "half",
-  substitution: "substitution",
 };
 
 export default async function PublicMatchPage({

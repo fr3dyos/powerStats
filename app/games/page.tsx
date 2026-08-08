@@ -10,6 +10,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { formatDate, type Game, type Tournament } from "@/utils/api-shared";
+import { mapWithConcurrency } from "@/utils/async";
+import { AppShell } from "@/app/_components/AppShell";
 
 // --- Tiny fetch wrapper (mirrors the one in /teams; consolidated when
 // both pages move to use `apiFetch` from utils/api.ts).
@@ -58,10 +60,8 @@ export default function GamesPage() {
       const tournaments = await api<Tournament[]>("/api/tournaments").catch(
         () => [] as Tournament[],
       );
-      const lists = await Promise.all(
-        tournaments.map((t) =>
-          api<Game[]>(`/api/games?tournament_id=${t.id}`).catch(() => []),
-        ),
+      const lists = await mapWithConcurrency(tournaments, 4, (t) =>
+        api<Game[]>(`/api/games?tournament_id=${t.id}`).catch(() => []),
       );
       const flat: DisplayRow[] = lists.flat().map((g) => ({
         game: g,
@@ -100,7 +100,8 @@ export default function GamesPage() {
         : "scheduled";
 
   return (
-    <main
+    <AppShell footerText="built for Ultimate.">
+    <section
       className="ps-container"
       style={{ maxWidth: 960, margin: "0 auto", padding: "32px 20px" }}
     >
@@ -235,6 +236,7 @@ export default function GamesPage() {
           </table>
         </div>
       )}
-    </main>
+    </section>
+    </AppShell>
   );
 }

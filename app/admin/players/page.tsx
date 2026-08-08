@@ -12,6 +12,7 @@ import {
   type Player,
   type Team,
 } from "@/utils/api";
+import { mapWithConcurrency } from "@/utils/async";
 
 import AddPlayerForm from "./AddPlayerForm";
 import AdminPlayersTable from "./AdminPlayersTable";
@@ -40,20 +41,17 @@ export default async function AdminPlayersPage() {
   const nav = dict.navigation;
 
   // Gather every tournament, its teams, and every player on those teams to
-  // build the full player directory.
+  // build the full player directory.  Use concurrency limits so we never
+  // overwhelm the FastAPI connection pool.
   const tournaments = await tournamentsApi.list(50).catch(() => []);
-  const perTournament = await Promise.all(
-    tournaments.map(async (t) => {
-      const teams = await teamsApi.listByTournament(t.id).catch(() => [] as Team[]);
-      const playersByTeam = await Promise.all(
-        teams.map(async (team) => ({
-          team,
-          players: await playersApi.listByTeam(team.id).catch(() => [] as Player[]),
-        })),
-      );
-      return { tournament: t, teams, playersByTeam };
-    }),
-  );
+  const perTournament = await mapWithConcurrency(tournaments, 4, async (t) => {
+    const teams = await teamsApi.listByTournament(t.id).catch(() => [] as Team[]);
+    const playersByTeam = await mapWithConcurrency(teams, 4, async (team) => ({
+      team,
+      players: await playersApi.listByTeam(team.id).catch(() => [] as Player[]),
+    }));
+    return { tournament: t, teams, playersByTeam };
+  });
 
   const allPlayers: Array<Player & { team: Team | undefined }> = [];
   for (const { teams, playersByTeam } of perTournament) {
@@ -92,6 +90,9 @@ authLinks={[
 
         <AddPlayerForm
           teams={perTournament.flatMap(({ teams }) => teams)}
+          tournamentNames={Object.fromEntries(
+            perTournament.map(({ tournament: t }) => [t.id, t.name]),
+          )}
           copy={{
             addPlayer: at.addPlayer,
             firstName: at.firstName,

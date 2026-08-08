@@ -9,6 +9,8 @@ import {
   type Tournament,
 } from "@/utils/api";
 import { getServerLocale } from "@/utils/i18n-server";
+import { mapWithConcurrency } from "@/utils/async";
+import { AppShell } from "@/app/_components/AppShell";
 
 import { RankingsClient, type RankingRow } from "./_components/RankingsClient";
 
@@ -24,15 +26,13 @@ export default async function RankingsPage() {
 
   // Pull every team + every game per tournament so we can compute
   // league-wide aggregates without N+1 in the client.
-  const perTournament = await Promise.all(
-    tournaments.map(async (t) => {
-      const [teams, games] = await Promise.all([
-        teamsApi.listByTournament(t.id).catch(() => [] as Team[]),
-        gamesApi.listByTournament(t.id).catch(() => [] as Game[]),
-      ]);
-      return { tournament: t, teams, games };
-    }),
-  );
+  const perTournament = await mapWithConcurrency(tournaments, 4, async (t) => {
+    const [teams, games] = await Promise.all([
+      teamsApi.listByTournament(t.id).catch(() => [] as Team[]),
+      gamesApi.listByTournament(t.id).catch(() => [] as Game[]),
+    ]);
+    return { tournament: t, teams, games };
+  });
 
   // --- Team rows: aggregate wins / losses / PF / PA across tournaments.
   const teamAgg = new Map<
@@ -113,41 +113,41 @@ export default async function RankingsPage() {
       tournamentIds: number[];
     }
   >();
-  await Promise.all(
-    perTournament.flatMap(({ teams }) => teams).map(async (team) => {
+  await mapWithConcurrency(
+    perTournament.flatMap(({ teams }) => teams),
+    4,
+    async (team) => {
       const players = await playersApi
         .listByTeam(team.id)
         .catch(() => [] as Player[]);
-      await Promise.all(
-        players.map(async (p) => {
-          const stats = await playersApi.stats(p.id).catch(() => null);
-          if (!stats) return;
-          const cur =
-            playerRows.get(p.id) ?? {
-              id: p.id,
-              name: `${p.first_name} ${p.last_name}`.trim(),
-              team: team.name,
-              goals: 0,
-              assists: 0,
-              defenses: 0,
-              power: 0,
-              streak: 0,
-              tournamentIds: [],
-            };
-          for (const row of stats.per_tournament) {
-            cur.goals += row.goals;
-            cur.assists += row.assists;
-            cur.defenses += row.defenses;
-            if (!cur.tournamentIds.includes(row.tournament_id)) {
-              cur.tournamentIds.push(row.tournament_id);
-            }
+      await mapWithConcurrency(players, 4, async (p) => {
+        const stats = await playersApi.stats(p.id).catch(() => null);
+        if (!stats) return;
+        const cur =
+          playerRows.get(p.id) ?? {
+            id: p.id,
+            name: `${p.first_name} ${p.last_name}`.trim(),
+            team: team.name,
+            goals: 0,
+            assists: 0,
+            defenses: 0,
+            power: 0,
+            streak: 0,
+            tournamentIds: [],
+          };
+        for (const row of stats.per_tournament) {
+          cur.goals += row.goals;
+          cur.assists += row.assists;
+          cur.defenses += row.defenses;
+          if (!cur.tournamentIds.includes(row.tournament_id)) {
+            cur.tournamentIds.push(row.tournament_id);
           }
-          cur.power = cur.goals + cur.assists * 0.7 + cur.defenses * 0.5;
-          cur.streak = computeStreakFromGames(perTournament, p.id, "player");
-          playerRows.set(p.id, cur);
-        }),
-      );
-    }),
+        }
+        cur.power = cur.goals + cur.assists * 0.7 + cur.defenses * 0.5;
+        cur.streak = computeStreakFromGames(perTournament, p.id, "player");
+        playerRows.set(p.id, cur);
+      });
+    },
   );
 
   const teamRows: RankingRow[] = [...teamAgg.values()].map((r) => ({
@@ -175,20 +175,22 @@ export default async function RankingsPage() {
   }));
 
   return (
-    <RankingsClient
-      tournaments={tournamentOptions}
-      teams={teamRows}
-      players={playerRankingRows}
-      labels={{
-        title: dict.rankings.title,
-        filterTournament: dict.rankings.allTournaments,
-        allTournaments: dict.rankings.allTournaments,
-        typeTeams: dict.rankings.topTeams,
-        typePlayers: dict.rankings.topScorers,
-        exportCsv: dict.publicStats.exportCsv,
-        noData: common.noData,
-      }}
-    />
+    <AppShell footerText={common.footer}>
+      <RankingsClient
+        tournaments={tournamentOptions}
+        teams={teamRows}
+        players={playerRankingRows}
+        labels={{
+          title: dict.rankings.title,
+          filterTournament: dict.rankings.allTournaments,
+          allTournaments: dict.rankings.allTournaments,
+          typeTeams: dict.rankings.topTeams,
+          typePlayers: dict.rankings.topScorers,
+          exportCsv: dict.publicStats.exportCsv,
+          noData: common.noData,
+        }}
+      />
+    </AppShell>
   );
 }
 

@@ -7,6 +7,7 @@ import {
   tournamentsApi,
 } from "@/utils/api";
 import { getServerLocale } from "@/utils/i18n-server";
+import { mapWithConcurrency } from "@/utils/async";
 
 import {
   TournamentBrowser,
@@ -25,16 +26,14 @@ export default async function TournamentsListPage() {
 
   // Pre-fetch team counts so each card shows the team count without N+1.
   const teamCounts: Record<number, number> = {};
-  await Promise.all(
-    tournaments.map(async (t) => {
-      try {
-        const teams = await teamsApi.listByTournament(t.id);
-        teamCounts[t.id] = teams.length;
-      } catch {
-        teamCounts[t.id] = 0;
-      }
-    }),
-  );
+  await mapWithConcurrency(tournaments, 4, async (t) => {
+    try {
+      const teams = await teamsApi.listByTournament(t.id);
+      teamCounts[t.id] = teams.length;
+    } catch {
+      teamCounts[t.id] = 0;
+    }
+  });
 
   // Classify each tournament by status. Games API failures are swallowed so
   // the page still renders when the games endpoint is unavailable — those

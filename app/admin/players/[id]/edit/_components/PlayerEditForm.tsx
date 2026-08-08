@@ -1,15 +1,26 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
-import { createPlayerAction } from "./_actions";
+import {
+  deletePlayerAction,
+  updatePlayerAction,
+} from "../../../_actions";
 import type { Team } from "@/utils/api-shared";
 
-type AddPlayerFormProps = {
+type PlayerEditFormProps = {
+  playerId: number;
+  initial: {
+    first_name: string;
+    last_name: string;
+    jersey_number: number | null;
+    team_id: number;
+  };
   teams: Team[];
   tournamentNames?: Record<number, string>;
+  canDelete: boolean;
   copy: {
-    addPlayer: string;
     firstName: string;
     lastName: string;
     jersey: string;
@@ -17,19 +28,35 @@ type AddPlayerFormProps = {
     selectTeam: string;
     save: string;
     cancel: string;
+    back: string;
+    delete: string;
+    deleteConfirm: string;
     requiredFields: string;
     playerExists: string;
-    playerAdded: string;
-    playerAddFailed: string;
+    playerSaved: string;
+    playerUpdateFailed: string;
+    deleteForbidden: string;
+    playerDeleteFailed: string;
+    playerDeleted: string;
   };
 };
 
-export default function AddPlayerForm({ teams, tournamentNames, copy }: AddPlayerFormProps) {
-  const [open, setOpen] = useState(false);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [jersey, setJersey] = useState("");
-  const [teamId, setTeamId] = useState<string>("");
+export default function PlayerEditForm({
+  playerId,
+  initial,
+  teams,
+  tournamentNames,
+  canDelete,
+  copy,
+}: PlayerEditFormProps) {
+  const router = useRouter();
+  const [firstName, setFirstName] = useState(initial.first_name);
+  const [lastName, setLastName] = useState(initial.last_name);
+  const [jersey, setJersey] = useState(
+    initial.jersey_number === null ? "" : String(initial.jersey_number),
+  );
+  const [teamId, setTeamId] = useState<string>(String(initial.team_id));
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -49,16 +76,10 @@ export default function AddPlayerForm({ teams, tournamentNames, copy }: AddPlaye
       }));
   }, [teams]);
 
-  function reset() {
-    setFirstName("");
-    setLastName("");
-    setJersey("");
-    setTeamId("");
-  }
-
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFeedback(null);
+    setConfirmDelete(false);
 
     if (!firstName.trim() || !lastName.trim() || !teamId) {
       setFeedback({ ok: false, msg: copy.requiredFields });
@@ -72,44 +93,50 @@ export default function AddPlayerForm({ teams, tournamentNames, copy }: AddPlaye
     formData.set("team_id", teamId);
 
     startTransition(async () => {
-      const result = await createPlayerAction(formData);
+      const result = await updatePlayerAction(playerId, formData);
       if (result.ok === true) {
-        setFeedback({ ok: true, msg: copy.playerAdded });
-        reset();
+        setFeedback({ ok: true, msg: copy.playerSaved });
+        router.refresh();
         return;
       }
-      const errorKey = result.error;
       const messageKey =
-        errorKey === "requiredFields"
+        result.error === "requiredFields"
           ? copy.requiredFields
-          : errorKey === "playerExists"
+          : result.error === "playerExists"
             ? copy.playerExists
-            : copy.playerAddFailed;
+            : copy.playerUpdateFailed;
       setFeedback({ ok: false, msg: messageKey });
     });
   }
 
-  if (!open) {
-    return (
-      <div style={{ marginBottom: 16 }}>
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="ps-button ps-button--primary"
-          disabled={teams.length === 0}
-          aria-disabled={teams.length === 0}
-          title={teams.length === 0 ? copy.selectTeam : undefined}
-        >
-          {copy.addPlayer}
-        </button>
-      </div>
-    );
+  function handleDelete() {
+    setFeedback(null);
+    startTransition(async () => {
+      const result = await deletePlayerAction(playerId);
+      if (result.ok === true) {
+        setFeedback({ ok: true, msg: copy.playerDeleted });
+        // The player is gone — send the user back to the directory.
+        setTimeout(() => router.push("/admin/players"), 600);
+        return;
+      }
+      const messageKey =
+        result.error === "deleteForbidden"
+          ? copy.deleteForbidden
+          : copy.playerDeleteFailed;
+      setFeedback({ ok: false, msg: messageKey });
+      setConfirmDelete(false);
+    });
   }
 
   return (
     <form
       className="ps-card"
-      style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 12 }}
+      style={{
+        marginTop: 16,
+        display: "flex",
+        flexDirection: "column",
+        gap: 16,
+      }}
       onSubmit={handleSubmit}
     >
       <div
@@ -162,7 +189,6 @@ export default function AddPlayerForm({ teams, tournamentNames, copy }: AddPlaye
             className="ps-input"
             required
           >
-            <option value="">{copy.selectTeam}</option>
             {teamGroups.map((group) => (
               <optgroup key={group.tournamentId} label={tournamentNames?.[group.tournamentId] ?? `Tournament ${group.tournamentId}`}>
                 {group.teams.map((t) => (
@@ -176,26 +202,70 @@ export default function AddPlayerForm({ teams, tournamentNames, copy }: AddPlaye
         </label>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <button
           type="submit"
-          className="ps-button ps-button--primary"
+          className="ps-btn ps-btn--primary"
           disabled={isPending}
         >
           {isPending ? "…" : copy.save}
         </button>
         <button
           type="button"
-          className="ps-button ps-button--ghost"
-          onClick={() => {
-            setOpen(false);
-            setFeedback(null);
-            reset();
-          }}
+          className="ps-btn ps-btn--ghost"
+          onClick={() => router.push("/admin/players")}
           disabled={isPending}
         >
-          {copy.cancel}
+          {copy.back}
         </button>
+
+        {canDelete ? (
+          confirmDelete ? (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 13,
+                color: "var(--ps-text-muted)",
+              }}
+            >
+              {copy.deleteConfirm}
+              <button
+                type="button"
+                className="ps-btn ps-btn--danger"
+                onClick={handleDelete}
+                disabled={isPending}
+                style={{ padding: "4px 12px", fontSize: 12 }}
+              >
+                {copy.delete}
+              </button>
+              <button
+                type="button"
+                className="ps-btn ps-btn--ghost"
+                onClick={() => setConfirmDelete(false)}
+                disabled={isPending}
+                style={{ padding: "4px 12px", fontSize: 12 }}
+              >
+                {copy.cancel}
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="ps-btn ps-btn--ghost"
+              onClick={() => {
+                setConfirmDelete(true);
+                setFeedback(null);
+              }}
+              disabled={isPending}
+              style={{ color: "var(--ps-error, #c62828)", borderColor: "var(--ps-error, #c62828)" }}
+            >
+              {copy.delete}
+            </button>
+          )
+        ) : null}
+
         {feedback ? (
           <span
             role={feedback.ok ? "status" : "alert"}

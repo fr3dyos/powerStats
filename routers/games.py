@@ -224,7 +224,28 @@ def create_game(payload: schemas.GameCreate, db: Session = Depends(get_db), _: s
     :return: The created game.
     """
     _get_tournament_or_404(db, payload.tournament_id)
-    # Validate team existence.
+    _validate_game_payload(db, payload)
+    try:
+        game = models.Game(**payload.dict())
+        db.add(game)
+        db.commit()
+        db.refresh(game)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not create game: {str(exc)}",
+        ) from exc
+    return game
+
+
+def _validate_game_payload(db: Session, payload: schemas.GameCreate) -> None:
+    """Run the shared create-game validations (teams, rule/limits).
+
+    :param db: SQLAlchemy session.
+    :param payload: The game payload to validate.
+    :raises HTTPException: 400 on invalid teams or missing limit values.
+    """
     home = db.query(models.Team).filter(models.Team.id == payload.home_team_id).first()
     away = db.query(models.Team).filter(models.Team.id == payload.away_team_id).first()
     if home is None or away is None:
@@ -247,18 +268,48 @@ def create_game(payload: schemas.GameCreate, db: Session = Depends(get_db), _: s
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="score_limit is required when game_rule is SCORE_LIMIT.",
         )
+
+
+@router.post("/batch", response_model=List[schemas.Game], status_code=status.HTTP_201_CREATED)
+def create_games_batch(
+    payload: schemas.GameBatchCreate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_scorekeeper),
+):
+    """Create multiple games in one transaction (bulk scheduling / CSV upload).
+
+    :param payload: A tournament id plus a list of game payloads.
+    :param db: SQLAlchemy session.
+    :return: The created games.
+    """
+    _get_tournament_or_404(db, payload.tournament_id)
+    if not payload.games:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No games were provided.",
+        )
+    for game in payload.games:
+        if game.tournament_id != payload.tournament_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Every game must belong to the batch tournament.",
+            )
+        _validate_game_payload(db, game)
     try:
-        game = models.Game(**payload.dict())
-        db.add(game)
+        created = [models.Game(**game.dict()) for game in payload.games]
+        db.add_all(created)
         db.commit()
-        db.refresh(game)
+        for game in created:
+            db.refresh(game)
+    except HTTPException:
+        raise
     except Exception as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Could not create game: {str(exc)}",
+            detail=f"Could not create games: {str(exc)}",
         ) from exc
-    return game
+    return created
 
 
 @router.get("/{game_id}", response_model=schemas.GameWithDetails)
@@ -635,6 +686,9 @@ def end_game(
 
     try:
         game.is_completed = True
+        game.is_live = False
+        game.clock_running = False
+        game.clock_started_at = None
         game.end_time = datetime.now(timezone.utc)
         db.commit()
         db.refresh(game)

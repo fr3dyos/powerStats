@@ -41,6 +41,7 @@ type Labels = {
   oneSelected: string;
   manySelected: string;
   deleteConfirm: string;
+  scheduleGames: string;
 };
 
 type AdminTournamentsTableProps = {
@@ -268,6 +269,16 @@ export default function AdminTournamentsTable({
                       }}
                     >
                       {labels.viewBracket}
+                    </Link>
+                    <Link
+                      href={`/admin/tournaments/${tournament.id}/games/new`}
+                      style={{
+                        fontSize: 12,
+                        color: "var(--ps-accent)",
+                        marginLeft: 12,
+                      }}
+                    >
+                      {labels.scheduleGames}
                     </Link>
                   </td>
                 </tr>

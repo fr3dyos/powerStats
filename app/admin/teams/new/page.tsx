@@ -6,9 +6,11 @@ import { AppShell } from "@/app/_components/AppShell";
 import { SignOutButton } from "@/app/_components/SignOutButton";
 import { getAuthedUser } from "@/utils/supabase/server";
 import { getServerLocale } from "@/utils/i18n-server";
+import { teamsApi, tournamentsApi } from "@/utils/api";
+import { mapWithConcurrency } from "@/utils/async";
 
-// The form itself isn't wired up yet; the page exists so the admin
-// teams hub's "Add team" button has a real destination.
+import NewTeamForm from "./_components/NewTeamForm";
+
 export const dynamic = "force-dynamic";
 
 const ALLOWED_ROLES = new Set(["admin", "scorekeeper"]);
@@ -24,51 +26,74 @@ export default async function NewTeamPage() {
     redirect("/?error=unauthorized");
   }
 
+  const tournaments = await tournamentsApi.list(50).catch(() => []);
+
+  // Count existing teams so the header subtitle can show the real total.
+  const teamCounts = await mapWithConcurrency(tournaments, 4, async (t) => {
+    const teams = await teamsApi.listByTournament(t.id).catch(() => []);
+    return teams.length;
+  });
+  const totalTeams = teamCounts.reduce((sum, n) => sum + n, 0);
+
   const { dict } = await getServerLocale();
   const auth = dict.auth;
   const dashboard = dict.adminDashboard;
-  const teams = dict.adminTeams;
+  const at = dict.adminTeams;
+  const c = dict.common;
 
   return (
     <AppShell
       brandSubtitle={auth.adminBrand}
       authLinks={[
         { label: dashboard.title, href: "/admin", variant: "ghost" },
-        { label: teams.title, href: "/admin/teams", variant: "ghost" },
+        { label: at.title, href: "/admin/teams", variant: "ghost" },
       ]}
     >
       <section className="ps-admin">
         <header className="ps-admin__header">
           <div className="ps-admin__title">
-            <h1>{teams.addTeam}</h1>
-            <span className="ps-status-pill" aria-live="polite">
-              {dashboard.comingSoon}
-            </span>
+            <h1>{at.addTeam}</h1>
           </div>
           <SignOutButton label={auth.signOut} />
         </header>
 
         <p className="ps-admin__subtitle">
-          {teams.emptyCopy}
+          {tournaments.length === 0
+            ? at.emptyCopy
+            : at.summary
+                .replace("{total}", String(totalTeams))
+                .replace("{count}", String(tournaments.length))}
         </p>
 
-        <div className="ps-card" style={{ marginTop: 16 }}>
-          <h2 style={{ fontSize: 18, marginTop: 0 }}>
-            {teams.addTeam}
-          </h2>
-          <p style={{ color: "var(--ps-text-muted)", marginBottom: 16 }}>
-            {dashboard.comingSoon}. This form will collect the team name,
-            tournament assignment, and optional logo.
-          </p>
-          <div style={{ display: "flex", gap: 8 }}>
+        {tournaments.length === 0 ? (
+          <div className="ps-card" style={{ marginTop: 16 }}>
+            <h3>{at.emptyTitle}</h3>
+            <p>{at.emptyCopy}</p>
             <Link
-              href="/admin/teams"
+              href="/tournaments"
               className="ps-btn ps-btn--ghost"
+              style={{ marginTop: 12 }}
             >
-              {dict.common.back}
+              {c.back}
             </Link>
           </div>
-        </div>
+        ) : (
+          <NewTeamForm
+            tournaments={tournaments}
+            copy={{
+              teamName: at.teamName,
+              tournament: c.tournament,
+              selectTournament: at.selectTournament,
+              logoUrl: at.logoUrl,
+              logoUrlHint: "https://…",
+              save: at.save,
+              cancel: at.cancel,
+              requiredFields: at.requiredFields,
+              teamCreated: at.teamCreated,
+              teamAddFailed: at.teamAddFailed,
+            }}
+          />
+        )}
       </section>
     </AppShell>
   );

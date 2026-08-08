@@ -298,6 +298,37 @@ border-bottom: 1px solid var(--ps-border);
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Global nav links ------------------------------------------------------- */
+.ps-nav-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ps-text-muted);
+  text-decoration: none;
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+}
+.ps-nav-link:hover {
+  color: var(--ps-text);
+  text-decoration: none;
+}
+.ps-nav-link--active {
+  color: var(--ps-accent, #FF5722);
+  border-bottom-color: var(--ps-accent, #FF5722);
+}
+
+/* Vertical divider in the header nav */
+.ps-header__divider {
+  width: 1px;
+  height: 20px;
+  background: var(--ps-border);
+  margin: 0 4px;
+  flex-shrink: 0;
 }
 
 /* Language switcher */
@@ -1118,20 +1149,19 @@ a.ps-card:hover,
   color: var(--ps-text);
 }
 
-/* Bracket — single-elim grid. */
+/* Bracket — single-elim grid with connector lines between rounds. */
 .ps-bracket {
   display: flex;
-  gap: 32px;
+  align-items: stretch;
+  gap: 0;
   overflow-x: auto;
   padding: 8px 4px 16px;
 }
 .ps-bracket__round {
   display: flex;
   flex-direction: column;
-  justify-content: space-around;
   min-width: 220px;
-  gap: 12px;
-  position: relative;
+  flex: none;
 }
 .ps-bracket__round-title {
   font-size: 12px;
@@ -1139,7 +1169,34 @@ a.ps-card:hover,
   color: var(--ps-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  margin-bottom: 4px;
+  margin: 0 12px 4px;
+}
+.ps-bracket__round-matches {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  flex: 1;
+  gap: 12px;
+  min-height: 220px;
+  padding: 0 12px;
+}
+/* Connector column that draws the tree links between two rounds. */
+.ps-bracket__connector {
+  position: relative;
+  width: 36px;
+  flex: none;
+  align-self: stretch;
+}
+.ps-bracket__line {
+  position: absolute;
+  background: var(--ps-border-strong);
+  pointer-events: none;
+}
+.ps-bracket__line--h {
+  height: 2px;
+}
+.ps-bracket__line--v {
+  width: 2px;
 }
 .ps-bracket__match {
   background-color: var(--ps-surface);
@@ -1153,10 +1210,11 @@ a.ps-card:hover,
   position: relative;
   min-height: 56px;
   justify-content: center;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .ps-bracket__match--winner {
-  border-left-width: 3px;
   border-left-color: var(--ps-secondary);
+  box-shadow: 0 0 0 1px var(--ps-border-strong);
 }
 .ps-bracket__match--live {
   border: 1px solid var(--ps-lime);
@@ -1179,6 +1237,7 @@ a.ps-card:hover,
   font-family: var(--ps-font-display);
   font-weight: 800;
   font-size: 14px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Tables — for standings / classification grids. */
@@ -1342,10 +1401,10 @@ a.ps-card:hover,
   .ps-leaderboard-row {
     grid-template-columns: 28px 28px 1fr auto;
   }
-  .ps-bracket {
-    gap: 16px;
-  }
   .ps-bracket__round {
     min-width: 180px;
+  }
+  .ps-bracket__connector {
+    width: 22px;
   }
 }

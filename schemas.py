@@ -258,6 +258,11 @@ class GameBase(BaseModel):
     score_limit: Optional[int] = Field(None, ge=0)  # points to win
     field_number: Optional[int] = None
     is_completed: bool = False
+    # Live status + game clock (scorekeeper console).
+    is_live: bool = False
+    clock_running: bool = False
+    clock_started_at: Optional[datetime] = None
+    clock_elapsed: int = 0
     # Phase / group attribution
     phase_id: Optional[int] = None
     group_id: Optional[int] = None
@@ -274,6 +279,11 @@ class GameBase(BaseModel):
 class GameCreate(GameBase):
     pass
 
+class GameBatchCreate(BaseModel):
+    """Bulk game scheduling payload (used by the CSV upload flow)."""
+    tournament_id: int
+    games: List[GameCreate]
+
 class GameUpdate(BaseModel):
     tournament_id: Optional[int] = None
     home_team_id: Optional[int] = None
@@ -287,6 +297,10 @@ class GameUpdate(BaseModel):
     score_limit: Optional[int] = Field(None, ge=0)
     field_number: Optional[int] = None
     is_completed: Optional[bool] = None
+    is_live: Optional[bool] = None
+    clock_running: Optional[bool] = None
+    clock_started_at: Optional[datetime] = None
+    clock_elapsed: Optional[int] = None
     phase_id: Optional[int] = None
     group_id: Optional[int] = None
     round_number: Optional[int] = Field(None, ge=1)

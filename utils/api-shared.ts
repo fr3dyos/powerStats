@@ -57,6 +57,10 @@ export type Game = {
   score_limit: number | null;
   field_number: number | null;
   is_completed: boolean;
+  is_live: boolean;
+  clock_running: boolean;
+  clock_started_at: string | null;
+  clock_elapsed: number;
   created_at: string;
   updated_at: string | null;
   home_team?: Team;
@@ -68,8 +72,7 @@ export type GameEventType =
   | "assist"
   | "defense"
   | "timeout"
-  | "half"
-  | "substitution";
+  | "half";
 
 export type GameEvent = {
   id: number;

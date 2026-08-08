@@ -100,7 +100,22 @@ const { dict } = await getServerLocale();
     return Number.isFinite(v) ? v : 0;
   };
 
+  const now = Date.now();
+  const upcoming = [...unscored]
+    .filter((g) => {
+      if (!g.start_time) return false;
+      const t = Date.parse(g.start_time);
+      return Number.isFinite(t) && t > now;
+    })
+    .sort((a, b) => sortTime(a, "start_time") - sortTime(b, "start_time"))
+    .slice(0, 10);
+
   const topUnscored = [...unscored]
+    .filter((g) => {
+      if (!g.start_time) return true;
+      const t = Date.parse(g.start_time);
+      return !Number.isFinite(t) || t <= now;
+    })
     .sort((a, b) => sortTime(b, "start_time") - sortTime(a, "start_time"))
     .slice(0, 10);
   const topCompleted = [...completed]
@@ -324,6 +339,68 @@ const { dict } = await getServerLocale();
                             {formatDate(g.end_time ?? g.start_time)}
                           </span>
                         </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {/* ─── Upcoming games ─────────────────────────────────────── */}
+          <div>
+            <div className="ps-section__eyebrow">{dashboard.upcomingGames}</div>
+            <div className="ps-card" style={{ marginTop: 8, minHeight: 0 }}>
+              {upcoming.length === 0 ? (
+                <p style={{ color: "var(--ps-text-muted)", fontSize: 13, margin: 0 }}>
+                  {dashboard.upcomingGamesEmpty}
+                </p>
+              ) : (
+                <ul
+                  style={{
+                    listStyle: "none",
+                    margin: 0,
+                    padding: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  {upcoming.map((g) => {
+                    const home = teamNameFor(g.home_team_id);
+                    const away = teamNameFor(g.away_team_id);
+                    return (
+                      <li key={g.id}>
+                        <Link
+                          href={`/admin/games/${g.id}/score`}
+                          className="ps-pill"
+                          style={{
+                            textDecoration: "none",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 8,
+                            width: "100%",
+                            padding: "10px 12px",
+                            borderRadius: "var(--ps-radius)",
+                            background: "var(--ps-surface-container-low)",
+                          }}
+                        >
+                          <span style={{ color: "var(--ps-text)", fontSize: 13 }}>
+                            {home} vs {away}
+                            {g.field_number ? (
+                              <span style={{ color: "var(--ps-text-muted)" }}>
+                                {" "}· Field {g.field_number}
+                              </span>
+                            ) : null}
+                          </span>
+                          <span style={{ color: "var(--ps-primary-container)", fontWeight: 800, fontSize: 13 }}>
+                            {dashboard.score}
+                          </span>
+                        </Link>
+                        <span style={{ fontSize: 12, color: "var(--ps-text-muted)", marginLeft: 12 }}>
+                          {formatDate(g.start_time)}
+                        </span>
                       </li>
                     );
                   })}

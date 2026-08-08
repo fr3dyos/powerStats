@@ -14,6 +14,7 @@ import {
   type Team,
 } from "@/utils/api";
 import { getServerLocale } from "@/utils/i18n-server";
+import { mapWithConcurrency } from "@/utils/async";
 
 export const dynamic = "force-dynamic";
 
@@ -43,12 +44,10 @@ const { dict } = await getServerLocale();
   if (!tournament) notFound();
 
   // Gather every player + their tournament stats in parallel.
-  const playersByTeam = await Promise.all(
-    teams.map(async (t) => ({
-      team: t,
-      players: await playersApi.listByTeam(t.id).catch(() => []),
-    })),
-  );
+  const playersByTeam = await mapWithConcurrency(teams, 4, async (t) => ({
+    team: t,
+    players: await playersApi.listByTeam(t.id).catch(() => []),
+  }));
 
   const allPlayers: Array<Player & { team: Team | undefined }> = [];
   for (const { team, players } of playersByTeam) {
@@ -56,13 +55,11 @@ const { dict } = await getServerLocale();
   }
 
   // Fetch every player's stats in parallel.
-  const statsRows = await Promise.all(
-    allPlayers.map(async (p) => {
-      const res = await playersApi.stats(p.id).catch(() => null);
-      const row = res?.per_tournament.find((s) => s.tournament_id === id);
-      return { player: p, stats: row ?? null };
-    }),
-  );
+  const statsRows = await mapWithConcurrency(allPlayers, 4, async (p) => {
+    const res = await playersApi.stats(p.id).catch(() => null);
+    const row = res?.per_tournament.find((s) => s.tournament_id === id);
+    return { player: p, stats: row ?? null };
+  });
 
 const goalLeaders: StatRow[] = statsRows
     .filter((r) => r.stats && r.stats.goals > 0)

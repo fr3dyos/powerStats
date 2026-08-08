@@ -21,8 +21,17 @@ if not SQLALCHEMY_DATABASE_URL:
         "connection string."
     )
 
-# Create SQLAlchemy engine
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+# Create SQLAlchemy engine with connection-pool settings tuned for the
+# admin pages that fire many concurrent reads (tournaments × teams × players).
+# - pool_pre_ping: discard stale connections after idle / DB restart.
+# - pool_recycle: recycle connections before the remote DB's timeout (30 min).
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    pool_pre_ping=True,
+    pool_recycle=1800,
+    pool_size=10,
+    max_overflow=10,
+)
 
 # Create SessionLocal class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

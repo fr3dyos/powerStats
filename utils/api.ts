@@ -15,6 +15,7 @@
  */
 
 import { cookies } from "next/headers";
+import { createClient } from "./supabase/server";
 
 // Re-export the client-safe surface so existing server-side callers that
 // import types/helpers from `./api` keep working without changes.
@@ -47,14 +48,20 @@ function resolveBaseUrl(override?: string): string {
 /**
  * Base64-url decode a Supabase JWT payload cookie fragment.
  *
- * Supabase stores its session (for both the browser and SSR clients) in a
- * cookie named ``sb-<project-ref>-auth-token`` whose value is a base64-url
- * encoded JSON array: ``["<access_token>","<refresh_token>",...]``. We only
- * need the first element (the JWT).
+ * @supabase/ssr (v0.12+) stores its session in a cookie named
+ * ``sb-<project-ref>-auth-token`` whose value is a JSON object of the auth
+ * token (``{ access_token, refresh_token, ... }``) encoded as
+ * ``base64-<base64url(JSON)>`` — note the literal ``base64-`` prefix the
+ * library prepends (see `BASE64_PREFIX` in its cookie adapter). Older
+ * versions wrote the raw base64url JSON with no prefix. This handles both.
  */
 function decodeSupabaseCookieValue(value: string): string | null {
   try {
-    const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+    let encoded = value;
+    if (value.startsWith("base64-")) {
+      encoded = value.slice("base64-".length);
+    }
+    const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
     const padded = normalized.padEnd(
       normalized.length + ((4 - (normalized.length % 4)) % 4),
       "=",
@@ -74,10 +81,33 @@ function decodeSupabaseCookieValue(value: string): string | null {
   return null;
 }
 
-/** Read the Supabase access token from the request cookies (if any). */
+/**
+ * Read the Supabase access token from the request cookies (if any).
+ *
+ * We prefer the Supabase server client here: it decodes the session cookie
+ * itself (including the ``base64-`` prefix and cookie chunking that
+ * @supabase/ssr uses), so it is immune to format drift. The manual cookie
+ * decode below is only a fallback for environments without the client env
+ * vars configured.
+ */
 async function readBearerToken(): Promise<string | null> {
   try {
     const store = await cookies();
+
+    // Preferred: let @supabase/ssr decode its own cookie format.
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+      try {
+        const supabase = createClient(store);
+        const { data } = await supabase.auth.getSession();
+        if (data.session?.access_token) {
+          return data.session.access_token;
+        }
+      } catch {
+        /* fall through to manual decode */
+      }
+    }
+
+    // Fallback: manual decode of the Supabase auth cookie.
     const all = store.getAll();
     for (const { name, value } of all) {
       // Supabase SSR/auth-js stores the session in a cookie named
@@ -197,6 +227,14 @@ export const teamsApi = {
     apiFetch<Team & { players: Player[]; home_games: Game[]; away_games: Game[] }>(
       `/teams/${id}`,
     ),
+  create: (input: { name: string; tournament_id: number; logo_url?: string }) =>
+    apiFetch<Team>("/teams", { method: "POST", body: input }),
+  update: (
+    id: number,
+    input: { name?: string; tournament_id?: number; logo_url?: string },
+  ) => apiFetch<Team>(`/teams/${id}`, { method: "PUT", body: input }),
+  remove: (id: number) =>
+    apiFetch<void>(`/teams/${id}`, { method: "DELETE" }),
 };
 
 export const playersApi = {
@@ -214,6 +252,21 @@ export const playersApi = {
     }),
   get: (id: number) =>
     apiFetch<Player & { game_events: GameEvent[] }>(`/players/${id}`),
+  update: (
+    id: number,
+    input: {
+      first_name?: string;
+      last_name?: string;
+      jersey_number?: number | null;
+      team_id?: number;
+    },
+  ) =>
+    apiFetch<Player>(`/players/${id}`, {
+      method: "PUT",
+      body: input,
+    }),
+  remove: (id: number) =>
+    apiFetch<void>(`/players/${id}`, { method: "DELETE" }),
   stats: (id: number) =>
     apiFetch<{
       player: { id: number; first_name: string; last_name: string; jersey_number: number | null; team_id: number };
@@ -237,6 +290,17 @@ export const playersApi = {
     }>(`/players/${id}/stats`),
 };
 
+export type GameCreateInput = {
+  tournament_id: number;
+  home_team_id: number;
+  away_team_id: number;
+  start_time?: string | null;
+  game_rule: "TIME_LIMIT" | "SCORE_LIMIT";
+  time_limit?: number | null;
+  score_limit?: number | null;
+  field_number?: number | null;
+};
+
 export const gamesApi = {
   listByTournament: (tournamentId: number) =>
     apiFetch<Game[]>("/games", { query: { tournament_id: tournamentId } }),
@@ -250,4 +314,11 @@ export const gamesApi = {
       }
     >(`/games/${id}`),
   events: (id: number) => apiFetch<GameEvent[]>(`/games/${id}/events`),
+  create: (input: GameCreateInput) =>
+    apiFetch<Game>("/games", { method: "POST", body: input }),
+  createMany: (tournamentId: number, games: Omit<GameCreateInput, "tournament_id">[]) =>
+    apiFetch<Game[]>("/games/batch", {
+      method: "POST",
+      body: { tournament_id: tournamentId, games },
+    }),
 };

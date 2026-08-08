@@ -13,6 +13,7 @@ import {
   type Team,
   type Tournament,
 } from "@/utils/api";
+import { mapWithConcurrency } from "@/utils/async";
 
 import AdminTournamentsTable from "./AdminTournamentsTable";
 
@@ -44,13 +45,13 @@ export default async function AdminTournamentsPage() {
   const nav = dict.navigation;
 
   const tournaments = await tournamentsApi.list(50).catch(() => []);
-  const rows: Row[] = await Promise.all(
-    tournaments.map(async (tournament) => {
-      const teams = await teamsApi.listByTournament(tournament.id).catch(() => [] as Team[]);
-      const games = await gamesApi.listByTournament(tournament.id).catch(() => [] as Game[]);
-      return { tournament, teams, games };
-    }),
-  );
+  const rows: Row[] = await mapWithConcurrency(tournaments, 4, async (tournament) => {
+    const [teams, games] = await Promise.all([
+      teamsApi.listByTournament(tournament.id).catch(() => [] as Team[]),
+      gamesApi.listByTournament(tournament.id).catch(() => [] as Game[]),
+    ]);
+    return { tournament, teams, games };
+  });
 
   const totalTeams = rows.reduce((acc, r) => acc + r.teams.length, 0);
   const totalGames = rows.reduce((acc, r) => acc + r.games.length, 0);
@@ -88,6 +89,7 @@ export default async function AdminTournamentsPage() {
     oneSelected: at.oneSelected,
     manySelected: at.manySelected,
     deleteConfirm: at.deleteConfirm,
+    scheduleGames: at.scheduleGames,
   };
 
   return (

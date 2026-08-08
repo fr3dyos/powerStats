@@ -6,10 +6,10 @@ import { AppShell } from "@/app/_components/AppShell";
 import { SignOutButton } from "@/app/_components/SignOutButton";
 import { getAuthedUser } from "@/utils/supabase/server";
 import { getServerLocale } from "@/utils/i18n-server";
-import { teamsApi } from "@/utils/api";
+import { teamsApi, tournamentsApi } from "@/utils/api";
 
-// The edit form itself isn't wired up yet; the page exists so the per-row
-// Edit button on /admin/teams has a real destination.
+import TeamEditForm from "./_components/TeamEditForm";
+
 export const dynamic = "force-dynamic";
 
 const ALLOWED_ROLES = new Set(["admin", "scorekeeper"]);
@@ -38,51 +38,73 @@ export default async function EditTeamPage({
   const team = await teamsApi.get(id).catch(() => null);
   if (!team) notFound();
 
+  const tournaments = await tournamentsApi.list(50).catch(() => []);
+
   const { dict } = await getServerLocale();
   const auth = dict.auth;
   const dashboard = dict.adminDashboard;
-  const teams = dict.adminTeams;
+  const at = dict.adminTeams;
   const ap = dict.adminPanel;
+  const c = dict.common;
+
+  const canDelete = role === "admin";
 
   return (
     <AppShell
       brandSubtitle={auth.adminBrand}
       authLinks={[
         { label: dashboard.title, href: "/admin", variant: "ghost" },
-        { label: teams.title, href: "/admin/teams", variant: "ghost" },
+        { label: at.title, href: "/admin/teams", variant: "ghost" },
       ]}
     >
       <section className="ps-admin">
         <header className="ps-admin__header">
           <div className="ps-admin__title">
-            <h1>{ap.editTeam} — {team.name}</h1>
-            <span className="ps-status-pill" aria-live="polite">
-              {dashboard.comingSoon}
-            </span>
+            <h1>
+              {ap.editTeam} — {team.name}
+            </h1>
           </div>
           <SignOutButton label={auth.signOut} />
         </header>
 
         <p className="ps-admin__subtitle">
-          {teams.emptyCopy}
+          {team.name}
         </p>
 
-        <div className="ps-card" style={{ marginTop: 16 }}>
-          <h2 style={{ fontSize: 18, marginTop: 0 }}>
-            {ap.editTeam}: {team.name}
-          </h2>
-          <p style={{ color: "var(--ps-text-muted)", marginBottom: 16 }}>
-            {dashboard.comingSoon}. This form will let you update the
-            team name, logo, and roster.
-          </p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Link
-              href="/admin/teams"
-              className="ps-btn ps-btn--ghost"
-            >
-              {dict.common.back}
-            </Link>
-          </div>
+        <TeamEditForm
+          teamId={team.id}
+          initial={{
+            name: team.name,
+            tournament_id: team.tournament_id,
+            logo_url: team.logo_url,
+          }}
+          tournaments={tournaments}
+          canDelete={canDelete}
+          copy={{
+            teamName: at.teamName,
+            tournament: c.tournament,
+            selectTournament: at.selectTournament,
+            logoUrl: at.logoUrl,
+            logoUrlHint: "https://…",
+            save: at.save,
+            cancel: at.cancel,
+            back: c.back,
+            delete: ap.delete,
+            deleteConfirm: at.deleteConfirm,
+            requiredFields: at.requiredFields,
+            teamExists: at.teamExists,
+            teamSaved: at.teamSaved,
+            teamUpdateFailed: at.teamUpdateFailed,
+            deleteForbidden: at.deleteForbidden,
+            teamDeleteFailed: at.teamDeleteFailed,
+            teamDeleted: at.teamDeleted,
+          }}
+        />
+
+        <div style={{ marginTop: 16 }}>
+          <Link href="/admin/teams" className="ps-btn ps-btn--ghost">
+            ← {c.back}
+          </Link>
         </div>
       </section>
     </AppShell>

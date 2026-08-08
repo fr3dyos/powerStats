@@ -41,6 +41,25 @@ export function LiveScoringConsole({
   const [lastEventId, setLastEventId] = useState<number | null>(
     initialEvents[initialEvents.length - 1]?.id ?? null,
   );
+  // Game-clock ticker: `clockNow` re-renders the console once per second
+  // while the clock is running so the elapsed display stays live.
+  const [clockNow, setClockNow] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    if (!game.clock_running) return;
+    const id = window.setInterval(() => setClockNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [game.clock_running]);
+
+  /** Effective clock elapsed seconds: accumulated + running segment. */
+  const clockElapsedNow = useMemo(() => {
+    const base = game.clock_elapsed ?? 0;
+    if (game.clock_running && game.clock_started_at) {
+      const started = new Date(game.clock_started_at).getTime();
+      return base + Math.max(0, Math.floor((clockNow - started) / 1000));
+    }
+    return base;
+  }, [game.clock_elapsed, game.clock_running, game.clock_started_at, clockNow]);
 
   const period = useMemo(() => {
     const lastHalf = [...events]
@@ -76,7 +95,7 @@ export function LiveScoringConsole({
   const record = useCallback(
     async (
       playerId: number,
-      type: "goal" | "assist" | "defense" | "substitution",
+      type: "goal" | "assist" | "defense",
       points = 1,
     ) => {
       if (!canEdit || game.is_completed) return;
@@ -91,6 +110,7 @@ export function LiveScoringConsole({
             event_type: type,
             points,
             period,
+            time_elapsed: clockElapsedNow,
           }),
         });
         if (!ev.ok) {
@@ -112,7 +132,7 @@ export function LiveScoringConsole({
         setBusy(false);
       }
     },
-    [canEdit, game.id, game.is_completed, period],
+    [canEdit, game.id, game.is_completed, period, clockElapsedNow],
   );
 
   const undoLastEvent = useCallback(async () => {
@@ -246,23 +266,174 @@ export function LiveScoringConsole({
     }
   }, [canEdit, game.id, game.is_completed]);
 
+  /** Generic partial-update of the game via the admin proxy. */
+  const patchGame = useCallback(
+    async (patch: Partial<Game>) => {
+      if (!canEdit || game.is_completed) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/admin/games/${game.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        if (!res.ok) {
+          const detail = await res
+            .json()
+            .catch(() => ({ detail: res.statusText }));
+          throw new Error(detail.detail ?? `Request failed (${res.status})`);
+        }
+        const updated: Game = await res.json();
+        setGame(updated);
+        setClockNow(Date.now());
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [canEdit, game.id, game.is_completed],
+  );
+
+  const toggleLive = useCallback(() => {
+    void patchGame({ is_live: !game.is_live });
+  }, [patchGame, game.is_live]);
+
+  const startClock = useCallback(() => {
+    if (game.clock_running) return;
+    void patchGame({
+      clock_running: true,
+      clock_started_at: new Date().toISOString(),
+    });
+  }, [patchGame, game.clock_running]);
+
+  const pauseClock = useCallback(() => {
+    if (!game.clock_running) return;
+    const base = game.clock_elapsed ?? 0;
+    const started = game.clock_started_at
+      ? new Date(game.clock_started_at).getTime()
+      : 0;
+    const total =
+      base + (started ? Math.max(0, Math.floor((Date.now() - started) / 1000)) : 0);
+    void patchGame({
+      clock_running: false,
+      clock_started_at: null,
+      clock_elapsed: total,
+    });
+  }, [patchGame, game.clock_running, game.clock_elapsed, game.clock_started_at]);
+
+  const resetClock = useCallback(() => {
+    void patchGame({
+      clock_running: false,
+      clock_started_at: null,
+      clock_elapsed: 0,
+    });
+  }, [patchGame]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {game.is_completed ? (
+      <div
+        className="ps-card"
+        style={{
+          padding: "14px 18px",
+          display: "flex",
+          gap: 16,
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
         <div
-          className="ps-status-badge ps-status-badge--completed"
-          style={{ alignSelf: "flex-start" }}
+          style={{
+            display: "flex",
+            gap: 12,
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
         >
-          Game ended
+          {game.is_completed ? (
+            <span className="ps-status-badge ps-status-badge--completed">
+              Game ended
+            </span>
+          ) : game.is_live ? (
+            <span className="ps-live-pill">● Live</span>
+          ) : (
+            <span className="ps-pill">Not live</span>
+          )}
+          <span className="ps-pill">Half {period}</span>
+          {canEdit && !game.is_completed ? (
+            <button
+              type="button"
+              className={`ps-btn ${
+                game.is_live ? "ps-btn--ghost" : "ps-btn--primary"
+              }`}
+              onClick={toggleLive}
+              disabled={busy}
+            >
+              {game.is_live ? "Stop live" : "Go live"}
+            </button>
+          ) : null}
         </div>
-      ) : (
-        <span
-          className="ps-live-pill"
-          style={{ alignSelf: "flex-start" }}
+
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
         >
-          Live · half {period}
-        </span>
-      )}
+          <span
+            title="Game clock"
+            style={{
+              fontFamily: "JetBrains Mono, monospace",
+              fontSize: 28,
+              fontWeight: 700,
+              lineHeight: 1,
+              fontVariantNumeric: "tabular-nums",
+              color: game.clock_running
+                ? "var(--ps-primary)"
+                : "var(--ps-text)",
+              minWidth: 84,
+              textAlign: "center",
+            }}
+          >
+            {formatClock(clockElapsedNow)}
+          </span>
+          {canEdit && !game.is_completed ? (
+            <>
+              {game.clock_running ? (
+                <button
+                  type="button"
+                  className="ps-btn ps-btn--ghost"
+                  onClick={pauseClock}
+                  disabled={busy}
+                >
+                  Pause
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="ps-btn ps-btn--primary"
+                  onClick={startClock}
+                  disabled={busy}
+                >
+                  Start
+                </button>
+              )}
+              <button
+                type="button"
+                className="ps-btn ps-btn--ghost"
+                onClick={resetClock}
+                disabled={busy || (clockElapsedNow === 0 && !game.clock_running)}
+              >
+                Reset
+              </button>
+            </>
+          ) : null}
+        </div>
+      </div>
 
       <div
         className="ps-card"
@@ -556,7 +727,7 @@ function TeamColumn({
   players: Player[];
   onAction: (
     playerId: number,
-    type: "goal" | "assist" | "defense" | "substitution",
+    type: "goal" | "assist" | "defense",
   ) => void;
   onTimeout: () => void;
 }) {
@@ -717,20 +888,6 @@ function TeamColumn({
                 >
                   D
                 </button>
-                <button
-                  type="button"
-                  className="ps-btn ps-btn--ghost"
-                  style={{
-                    fontSize: 10,
-                    padding: "4px 8px",
-                  }}
-                  onClick={() => onAction(p.id, "substitution")}
-                  disabled={!canEdit || busy}
-                  aria-label="Substitution"
-                  title="Substitution"
-                >
-                  S
-                </button>
               </div>
             ))
           )}
@@ -781,4 +938,14 @@ function Mini({
       </div>
     </div>
   );
+}
+
+/** Format a number of seconds as MM:SS for the game clock display. */
+function formatClock(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const mm = Math.floor(s / 60)
+    .toString()
+    .padStart(2, "0");
+  const ss = (s % 60).toString().padStart(2, "0");
+  return `${mm}:${ss}`;
 }

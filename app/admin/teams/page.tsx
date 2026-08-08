@@ -12,6 +12,7 @@ import {
   teamColor,
   type Team,
 } from "@/utils/api";
+import { mapWithConcurrency } from "@/utils/async";
 
 export const dynamic = "force-dynamic";
 
@@ -38,12 +39,10 @@ const { dict } = await getServerLocale();
   // Gather every tournament and its teams so the admin can browse the full
   // team directory across events.
   const tournaments = await tournamentsApi.list(50).catch(() => []);
-  const perTournament = await Promise.all(
-    tournaments.map(async (t) => ({
-      tournament: t,
-      teams: await teamsApi.listByTournament(t.id).catch(() => [] as Team[]),
-    })),
-  );
+  const perTournament = await mapWithConcurrency(tournaments, 4, async (t) => ({
+    tournament: t,
+    teams: await teamsApi.listByTournament(t.id).catch(() => [] as Team[]),
+  }));
   const totalTeams = perTournament.reduce(
     (acc, p) => acc + p.teams.length,
     0,
