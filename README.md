@@ -9,7 +9,7 @@ GitHub: [@fr3dyos](https://github.com/fr3dyos)
 
 ## Tech Stack
 - **Backend**: Python 3.11+ / FastAPI
-- **Database**: PostgreSQL via Supabase
+- **Database**: PostgreSQL via Supabase (RLS enabled with public read policies)
 - **Frontend**: Next.js 14 (App Router) + React + TypeScript
 - **Styling**: Plain CSS with custom design tokens (`globals.css` + per-component classes)
 - **Auth**: Supabase Auth (role-based: admin / scorekeeper / public)
@@ -21,20 +21,20 @@ GitHub: [@fr3dyos](https://github.com/fr3dyos)
 
 ### Public Site
 - Tournament browser with search and filters
-- Interactive brackets with game details
+- Interactive brackets with game results
 - Player and team profiles with cross-tournament history
 - Live game tracking and event streams
-- Sortable leaderboards with CSV export
+- Sortable leaderboards (teams/players) with CSV export and year filter
 - Multi-language support (English, Spanish, Portuguese)
 - Light/dark theme
 
 ### Admin Panel
 - Tournament CRUD with phase management
-- Bracket and round-robin generation
+- Bracket and round-robin generation + schedule suggestions
 - Field and schedule management
 - Team and player management with photo/logo uploads
 - Live scoring console with full event tracking
-- Spirit score recording per game
+- Roster and spirit-score import from Excel/CSV (via `/roster`, `/spirit/import`)
 
 ### Live Scoring Console
 - Goal, assist, and defense recording
@@ -42,7 +42,7 @@ GitHub: [@fr3dyos](https://github.com/fr3dyos)
 - Half advancement tracking
 - Game end by time or score limit
 - Undo last event functionality
-- Real-time score updates
+- Real-time score updates with live/chronometer clock
 
 ### Tournament Management
 - Multi-phase tournaments (round-robin → bracket)
@@ -60,33 +60,38 @@ GitHub: [@fr3dyos](https://github.com/fr3dyos)
 ## Project Structure
 ```
 powerstats/
-├── main.py              # FastAPI app entry point
+├── main.py              # FastAPI app entry point (mounts all routers)
 ├── database.py          # SQLAlchemy engine & session
 ├── models.py            # SQLAlchemy ORM models
-├── schemas.py           # Pydantic V1 schemas
+├── schemas.py           # Pydantic schemas
 ├── routers/             # FastAPI route handlers
 │   ├── auth.py          # Supabase Auth + role checks
-│   ├── tournaments.py   # CRUD + phase/group/standings
+│   ├── tournaments.py   # CRUD + phases/groups/standings/bracket/schedule
 │   ├── teams.py         # CRUD + logo upload
 │   ├── players.py       # CRUD + photo upload + stats
-│   └── games.py         # Live scoring events
+│   ├── games.py         # Live scoring events + batch creation
+│   ├── admin.py         # Admin CRUD + roster/spirit import + health
+│   └── deps.py          # Shared auth dependencies
 ├── requirements.txt     # Python dependencies
 ├── app/                 # Next.js 14 frontend
-│   ├── layout.tsx       # Root layout with TopBar
+│   ├── layout.tsx       # Root layout (theme + i18n providers)
 │   ├── page.tsx         # Home page (public)
-│   ├── globals.css      # Global styles
-│   ├── _components/     # Shared components
-│   ├── admin/           # Admin panel pages
-│   ├── api/             # Next.js API proxy routes
-│   ├── games/           # Public match center
-│   ├── players/         # Player directory + profiles
-│   ├── rankings/        # Cross-tournament leaderboards
+│   ├── globals.css      # Global styles + design tokens
+│   ├── _components/     # Shared components (AppShell, providers, toggles)
+│   ├── admin/           # Admin panel (dashboard, teams, players, tournaments, games)
+│   ├── api/             # Next.js API proxy routes → FastAPI
+│   ├── games/           # Public match center + game detail
+│   ├── players/         # Player profiles
+│   ├── rankings/        # Cross-tournament leaderboards (CSV export)
 │   ├── teams/           # Team directory + profiles
-│   └── tournaments/     # Tournament hub + bracket
+│   └── tournaments/     # Tournament hub, bracket, public leaderboard
 ├── middleware.ts        # Supabase session refresh + auth gate
-├── messages/            # i18n dictionaries
-├── supabase/            # SQL migrations
-└── utils/               # API client, i18n helpers
+├── messages/            # i18n dictionaries (en/es/pt-BR)
+├── supabase/migrations/ # SQL migrations (apply via `supabase db push`)
+├── scripts/             # Seed scripts (e.g. seed_hatrio40.py) + SQL utilities
+├── utils/               # API client, Supabase clients, i18n + async helpers
+├── PAGE_MAP.md          # Page-by-page audit (tables, endpoints, pages, gaps)
+└── next.config.js       # Next.js configuration
 ```
 
 ## Architecture
@@ -100,6 +105,7 @@ powerstats/
 ### Backend (FastAPI)
 - RESTful API with role-based access control
 - SQLAlchemy ORM with proper relationships and cascades
+- Direct PostgreSQL connection to Supabase (writes bypass PostgREST/RLS)
 - Supabase integration for Auth, Storage, and Realtime
 - Comprehensive error handling and validation
 
@@ -107,12 +113,18 @@ powerstats/
 - **tournaments**: Tournament metadata and dates
 - **teams**: Teams with tournament association
 - **players**: Player profiles with team assignment
-- **games**: Match records with scores and rules
-- **game_events**: Live scoring events (goals, assists, etc.)
+- **games**: Match records with scores, rules, and clock columns (`is_live`, `clock_running`, `clock_started_at`, `clock_elapsed`)
+- **game_events**: Live scoring events (goals, assists, defenses, timeouts, halves)
 - **phases**: Tournament phases (round-robin, bracket)
 - **groups**: Group assignments within phases
+- **group_teams**: Group ↔ team join table
 - **player_tournament_stats**: Aggregated player statistics
 - **spirit_scores**: Spirit of the Game ratings
+- **token_rules** / **token_transactions**: Token economy rules and ledger
+- **Views**: `player_token_balances`, `team_token_balances` (read-only, no SECURITY DEFINER)
+
+All 12 tables have **RLS enabled** with public read policies. Writes go through
+the FastAPI backend's direct PostgreSQL connection, which is unaffected by RLS.
 
 ### Authentication & Authorization
 Three roles with escalating permissions:
@@ -145,6 +157,8 @@ SUPABASE_URL=your-project-url
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 SUPABASE_ANON_KEY=your-anon-key
 DATABASE_URL=your-postgres-connection-string
+SUPABASE_DB_URL=your-postgres-connection-string   # fallback, same as DATABASE_URL
+SUPABASE_STORAGE_BUCKET=team-logos                # Storage bucket for uploads
 ```
 
 ### Frontend Setup
@@ -174,21 +188,31 @@ supabase db push
 ### Public Endpoints
 - `GET /tournaments` - List tournaments
 - `GET /tournaments/{id}` - Tournament details with teams
+- `GET /tournaments/{id}/phases` - Tournament phases
+- `GET /tournaments/{id}/spirit-ranking` - Spirit of the Game rankings
+- `GET /phases/{id}` - Phase details with groups
+- `GET /phases/{id}/standings` - Standings table
 - `GET /teams` - List teams (filter by tournament)
 - `GET /teams/{id}` - Team details with players
 - `GET /players` - List players (filter by team)
-- `GET /players/{id}` - Player profile
+- `GET /players/{id}` - Player profile with events
 - `GET /players/{id}/stats` - Cross-tournament stats
 - `GET /games` - List games (filter by tournament)
 - `GET /games/{id}` - Game details with events
+- `GET /games/{id}/events` - Game event stream
+- `GET /auth/me` - Current user profile
+- `GET /admin/health` - Health check
 
-### Authenticated Endpoints
+### Auth Endpoints
+- `POST /auth/register` - Create account
 - `POST /auth/login` - Sign in
 - `POST /auth/logout` - Sign out
-- `GET /auth/me` - Current user profile
+- `GET /auth/users` - List users (admin)
+- `PUT /auth/users/{id}/role` - Update user role (admin)
 
 ### Scorekeeper Endpoints
 - `POST /games` - Create game
+- `POST /games/batch` - Bulk create games
 - `PUT /games/{id}` - Update game
 - `POST /games/{id}/events` - Record scoring event
 - `POST /games/{id}/timeout` - Start timeout
@@ -197,13 +221,31 @@ supabase db push
 - `POST /games/{id}/end` - End game
 - `POST /tournaments/{id}/bracket` - Generate bracket
 - `POST /tournaments/{id}/round-robin` - Generate fixtures
+- `POST /tournaments/{id}/schedule-suggestion` - Suggest schedule
+- `POST /tournaments/{id}/phases` - Create phase
+- `POST /phases/{id}/groups/split` - Auto-split groups
+- `POST /phases/{id}/round-robin` - Round-robin within phase
+- `POST /phases/{id}/bracket` - Bracket within phase
+- `POST /phases/{id}/advance` - Advance teams to next phase
+- `PUT /phases/{id}` - Update phase
 
 ### Admin Endpoints
 - `POST /tournaments` - Create tournament
+- `PUT /tournaments/{id}` - Update tournament
 - `DELETE /tournaments/{id}` - Delete tournament
-- `POST /phases` - Create phase
-- `POST /phases/{id}/groups/split` - Auto-split groups
-- `POST /phases/{id}/advance` - Advance teams to next phase
+- `POST /teams` - Create team
+- `PUT /teams/{id}` - Update team
+- `DELETE /teams/{id}` - Delete team
+- `POST /teams/{id}/logo` - Upload team logo
+- `POST /players` - Create player
+- `PUT /players/{id}` - Update player
+- `DELETE /players/{id}` - Delete player
+- `POST /players/{id}/photo` - Upload player photo
+- `DELETE /games/{id}` - Delete game
+- `DELETE /phases/{id}` - Delete phase
+- `POST /tournaments/{id}/roster` - Import team roster
+- `POST /tournaments/{id}/roster/import` - Bulk roster import
+- `POST /tournaments/{id}/spirit/import` - Import spirit scores
 
 ## Role-Based Access
 
@@ -212,7 +254,7 @@ supabase db push
 | `/`, `/rankings`, read paths | ✅ | ✅ | ✅ |
 | `/admin/*` | — | ✅ | ✅ |
 | Live scoring console | — | ✅ | ✅ |
-| Bulk delete / uploads | — | — | ✅ |
+| CRUD / bulk import / user management | — | — | ✅ |
 
 ## Scripts
 
@@ -220,6 +262,8 @@ supabase db push
 - `npm run build` — Production build
 - `npm run start` — Run production build
 - `npx tsc --noEmit` — Typecheck without emitting
+- `python -m uvicorn main:app --reload --port 8000` — Start FastAPI backend
+- `python scripts/seed_hatrio40.py` — Seed a tournament from an Excel file (see script header for `EXCEL_PATH`)
 
 ## Internationalization
 
@@ -229,6 +273,12 @@ Supported languages:
 - Portuguese - Brazil (pt-BR)
 
 Translation files are in `messages/` directory. Add new languages by creating a new JSON file and updating the `LOCALES` constant in `utils/i18n.ts`.
+
+## Page Map
+
+See [PAGE_MAP.md](PAGE_MAP.md) for a comprehensive page-by-page audit: every
+database table, API endpoint, and frontend page with its current status,
+buttons, functions, and known gaps.
 
 ## Contributing
 
