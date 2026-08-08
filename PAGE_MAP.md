@@ -21,7 +21,8 @@
 | token_rules | ✅ ON | public read | token economy rules |
 | token_transactions | ✅ ON | public read | token ledger |
 
-**Views:** `player_token_balances`, `team_token_balances` — read-only, no SECURITY DEFINER.
+**Views:** `player_token_balances`, `team_token_balances` — read-only, **fixed** with
+`security_invoker = true` (previously flagged as SECURITY DEFINER; migration applied, security advisor now clean).
 
 ---
 
@@ -141,6 +142,8 @@
 - **Status:** ✅ Fully functional
 - **Features:** Full game record with events
 - **i18n:** ✅ Uses dictionary lookups
+- **Fix applied:** Events table now resolves player names from both team rosters
+  (`playerNameMap`), so the "Player" column shows names instead of raw IDs.
 
 ### 11. `/players/[id]` — Player Profile
 - **Status:** ✅ Fully functional
@@ -165,6 +168,17 @@
   - Recently completed widget
   - Upcoming games widget
 - **Buttons:** Sign out, links to each section
+- **i18n:** ✅ Uses dictionary lookups
+- **Fixes applied:**
+  - Tournaments tile now links to `/admin/tournaments` (was public `/tournaments`)
+  - Live Scoring tile now links to `/admin/games` (the game selector dashboard), not a hard-coded game
+- **Missing:** Nothing
+
+### 13b. `/admin/games` — Scorekeeping Dashboard / Game Selector
+- **Status:** ✅ Fully functional
+- **Features:** Table of all games with tournament filter dropdown, status badges, date, matchup, score
+- **Buttons:** "Score" → `/admin/games/[id]/score` (live scoring console), "View" → `/games/[id]` (public), "New game" → `/admin/tournaments/[id]/games/new`
+- **Purpose:** Central entry point for scorekeepers to choose which game to score
 - **i18n:** ✅ Uses dictionary lookups
 - **Missing:** Nothing
 
@@ -215,6 +229,12 @@
 - **Form fields:** Name, dates, location, description, phases
 - **Actions:** Save → PUT, Delete → DELETE, Generate bracket, Generate round-robin
 - **i18n:** ✅ Uses dictionary lookups
+- **Fix applied:** Was failing with "no edition was possible" because 4 Next.js API
+  proxy routes were missing. Created:
+  - `app/api/tournaments/[id]/route.ts` (GET/PUT/DELETE)
+  - `app/api/tournaments/[id]/phases/route.ts` (GET/POST)
+  - `app/api/phases/[phaseId]/round-robin/route.ts` (POST)
+  - `app/api/phases/[phaseId]/bracket/route.ts` (POST)
 
 ### 22. `/admin/tournaments/[id]/games/new` — Create Games
 - **Status:** ✅ Fully functional
@@ -250,19 +270,25 @@
 ### Critical (Fixed)
 1. ✅ **RLS disabled on 12 tables** — NOW FIXED
 2. ✅ **Games table missing clock columns** — NOW FIXED (migration applied)
+3. ✅ **SECURITY DEFINER on `player_token_balances` / `team_token_balances` views** — NOW FIXED
+   (`ALTER VIEW ... SET (security_invoker = true)`; security advisor clean)
+4. ✅ **Tournament edit "no edition possible"** — NOW FIXED (4 missing API proxy routes created)
+5. ✅ **Admin dashboard wrong links** — NOW FIXED (Tournaments tile → `/admin/tournaments`,
+   Live Scoring tile → `/admin/games`)
+6. ✅ **Game events table showed player IDs instead of names** — NOW FIXED (roster name lookup on `/games/[id]`)
 
 ### Bug Fixes Needed
-3. **Teams page create form hardcodes tournament_id=1** — should use tournament picker
-4. **Teams page stats all zeros** — need to compute from games data
+7. **Teams page create form hardcodes tournament_id=1** — should use tournament picker
+8. **Teams page stats all zeros** — need to compute from games data
 
 ### i18n Gaps (hardcoded English)
-5. `/teams` page: "Teams", "Team name", "League", "W", "L", "Power score", etc.
-6. `/games` page: "Games", "Date", "Matchup", "Score", "Tournament", "Status", etc.
-7. Various admin pages have mixed i18n coverage
+9. `/teams` page: "Teams", "Team name", "League", "W", "L", "Power score", etc.
+10. `/games` page: "Games", "Date", "Matchup", "Score", "Tournament", "Status", etc.
+11. Various admin pages have mixed i18n coverage
 
 ### Enhancement Opportunities
-8. Team-level stats aggregation (wins/losses/power score from games)
-9. CSV bulk import for teams and players
-10. Real-time game clock timer
-11. Phase management UI in tournament edit
-12. Spirit score collection UI per game
+12. Team-level stats aggregation (wins/losses/power score from games)
+13. CSV bulk import for teams and players
+14. Real-time game clock timer
+15. Phase management UI in tournament edit
+16. Spirit score collection UI per game

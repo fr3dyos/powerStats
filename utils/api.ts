@@ -218,6 +218,23 @@ export const tournamentsApi = {
   list: (limit = 100) =>
     apiFetch<Tournament[]>("/tournaments", { query: { limit } }),
   get: (id: number) => apiFetch<Tournament & { teams: Team[] }>(`/tournaments/${id}`),
+  create: (input: {
+    name: string;
+    location?: string;
+    description?: string;
+    start_date?: string;
+    end_date?: string;
+  }) => apiFetch<Tournament>("/tournaments", { method: "POST", body: input }),
+  update: (
+    id: number,
+    input: {
+      name?: string;
+      location?: string;
+      description?: string;
+      start_date?: string;
+      end_date?: string;
+    },
+  ) => apiFetch<Tournament>(`/tournaments/${id}`, { method: "PUT", body: input }),
 };
 
 export const teamsApi = {

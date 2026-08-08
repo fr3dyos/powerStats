@@ -7,8 +7,8 @@ import { SignOutButton } from "@/app/_components/SignOutButton";
 import { getAuthedUser } from "@/utils/supabase/server";
 import { getServerLocale } from "@/utils/i18n-server";
 
-// The form itself isn't wired up yet; the page exists so the admin
-// toolbar's "New tournament" button has a real destination.
+import { NewTournamentForm } from "./_components/NewTournamentForm";
+
 export const dynamic = "force-dynamic";
 
 const ALLOWED_ROLES = new Set(["admin", "scorekeeper"]);
@@ -42,33 +42,27 @@ export default async function NewTournamentPage() {
         <header className="ps-admin__header">
           <div className="ps-admin__title">
             <h1>{ap.createTournament}</h1>
-            <span className="ps-status-pill" aria-live="polite">
-              {dashboard.comingSoon}
-            </span>
           </div>
           <SignOutButton label={auth.signOut} />
         </header>
 
-        <p className="ps-admin__subtitle">
-          {at.emptyCopy}
-        </p>
+        <NewTournamentForm
+          labels={{
+            name: at.name,
+            location: "Location",
+            description: "Description",
+            startDate: "Start date",
+            endDate: "End date",
+            create: at.create,
+            cancel: at.cancel,
+            saving: "Saving...",
+          }}
+        />
 
-        <div className="ps-card" style={{ marginTop: 16 }}>
-          <h2 style={{ fontSize: 18, marginTop: 0 }}>
-            {ap.createTournament}
-          </h2>
-          <p style={{ color: "var(--ps-text-muted)", marginBottom: 16 }}>
-            {dashboard.comingSoon}. This form will collect the tournament
-            name, date range, format, and field count.
-          </p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Link
-              href="/admin/tournaments"
-              className="ps-btn ps-btn--ghost"
-            >
-              {at.cancel}
-            </Link>
-          </div>
+        <div style={{ marginTop: 16 }}>
+          <Link href="/admin/tournaments" className="ps-btn ps-btn--ghost">
+            ← {at.cancel}
+          </Link>
         </div>
       </section>
     </AppShell>

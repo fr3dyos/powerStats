@@ -9,18 +9,14 @@ import {
 } from "@/utils/i18n";
 
 /**
- * Routes that require an authenticated user. `/` and `/rankings` stay
- * public; everything else in this list redirects anonymous traffic to
- * `/?error=auth` so the home page can surface a clear sign-in prompt.
- * Role checks (admin / scorekeeper) stay inside the page handlers — the
- * middleware only enforces "signed in or not".
+ * Routes that require an authenticated user. Only the `/admin` panel
+ * requires sign-in — `/teams`, `/players`, `/games`, `/tournaments` and
+ * `/rankings` are public. Role checks (admin / scorekeeper) stay inside
+ * the page handlers; the middleware only enforces "signed in or not"
+ * for the admin panel.
  */
 const PROTECTED_PREFIXES = [
   "/admin",
-  "/teams",
-  "/players",
-  "/games",
-  "/tournaments",
 ];
 
 /** Public auth flows that live under protected prefixes must stay reachable

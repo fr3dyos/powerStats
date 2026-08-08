@@ -5,6 +5,7 @@ import { AppShell } from "@/app/_components/AppShell";
 import {
   formatDate,
   gamesApi,
+  playersApi,
   teamColor,
   type GameEvent,
 } from "@/utils/api";
@@ -43,6 +44,17 @@ export default async function PublicMatchPage({
   const away = game.away_team;
   const accentHome = teamColor(home.name);
   const accentAway = teamColor(away.name);
+
+  // Fetch rosters so we can display player names in the events table.
+  const [homePlayers, awayPlayers] = await Promise.all([
+    playersApi.listByTeam(home.id).catch(() => []),
+    playersApi.listByTeam(away.id).catch(() => []),
+  ]);
+  const playerNameMap = new Map<number, string>();
+  for (const p of [...homePlayers, ...awayPlayers]) {
+    const name = `${p.first_name} ${p.last_name}`.trim();
+    playerNameMap.set(p.id, name);
+  }
 
   const status: "live" | "completed" | "scheduled" = game.is_completed
     ? "completed"
@@ -201,7 +213,7 @@ export default async function PublicMatchPage({
                     <tr key={ev.id}>
                       <td className="ps-table__num">{ev.period ?? "—"}</td>
                       <td>{EVENT_LABEL_KEY[ev.event_type]}</td>
-                      <td>{ev.player_id ? `#${ev.player_id}` : "—"}</td>
+                      <td>{ev.player_id ? playerNameMap.get(ev.player_id) ?? `#${ev.player_id}` : "—"}</td>
                       <td className="ps-table__num" style={{ textAlign: "right" }}>
                         {ev.points}
                       </td>

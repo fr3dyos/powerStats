@@ -34,6 +34,8 @@ GitHub: [@fr3dyos](https://github.com/fr3dyos)
 - Field and schedule management
 - Team and player management with photo/logo uploads
 - Live scoring console with full event tracking
+- Scorekeeping dashboard (`/admin/games`) — game selector with tournament filter,
+  status badges, and one-click jump to the scoring console
 - Roster and spirit-score import from Excel/CSV (via `/roster`, `/spirit/import`)
 
 ### Live Scoring Console

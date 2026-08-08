@@ -1,8 +1,8 @@
 "use client";
 
-// Rankings client: owns filter state, renders the table, and exports the
-// currently-visible rows to CSV via a Blob URL. Data is pre-aggregated on
-// the server so the client only deals with plain row objects.
+// Rankings client: owns filter state (tournament + team), column sorting and
+// CSV export. Data is pre-aggregated on the server so the client only deals
+// with plain row objects.
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -11,9 +11,19 @@ export type RankingRow = {
   id: number;
   subject: string;
   team: string | null;
-  points: number;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  goals: number;
+  goalsAgainst: number;
+  assists: number;
+  defenses: number;
+  goalsAvg: number;
+  assistsAvg: number;
+  defensesAvg: number;
   power: number;
   streak: number;
+  mvp: string | null;
   tournamentIds: number[];
 };
 
@@ -27,6 +37,26 @@ type Labels = {
   typePlayers: string;
   exportCsv: string;
   noData: string;
+  filterTeam: string;
+  allTeams: string;
+  team: string;
+  player: string;
+  goals: string;
+  assists: string;
+  defenses: string;
+  goalsAvg: string;
+  assistsAvg: string;
+  defensesAvg: string;
+  mvp: string;
+  power: string;
+  gamesPlayed: string;
+  gamesPlayedShort: string;
+  sortToggle: string;
+  wins: string;
+  losses: string;
+  pf: string;
+  pa: string;
+  streak: string;
 };
 
 type Props = {
@@ -38,12 +68,113 @@ type Props = {
 
 type Mode = "teams" | "players";
 
-const COLUMN_HEADERS: Record<string, string> = {
-  subject: "Name",
-  team: "Team",
-  points: "Points",
-  power: "Power score",
-  streak: "Streak",
+type SortKey =
+  | "subject"
+  | "team"
+  | "gamesPlayed"
+  | "wins"
+  | "losses"
+  | "goals"
+  | "goalsAgainst"
+  | "assists"
+  | "defenses"
+  | "goalsAvg"
+  | "assistsAvg"
+  | "defensesAvg"
+  | "power"
+  | "streak"
+  | "mvp";
+
+type ColumnDef = {
+  key: SortKey;
+  label: string;
+  numeric: boolean;
+  sortable: boolean;
+};
+
+function buildColumns(mode: Mode, labels: Labels): ColumnDef[] {
+  if (mode === "teams") {
+    return [
+      { key: "subject", label: labels.team, numeric: false, sortable: true },
+      { key: "gamesPlayed", label: labels.gamesPlayedShort, numeric: true, sortable: true },
+      { key: "wins", label: labels.wins, numeric: true, sortable: true },
+      { key: "losses", label: labels.losses, numeric: true, sortable: true },
+      { key: "goals", label: labels.pf, numeric: true, sortable: true },
+      { key: "goalsAgainst", label: labels.pa, numeric: true, sortable: true },
+      { key: "goalsAvg", label: labels.goalsAvg, numeric: true, sortable: true },
+      { key: "power", label: labels.power, numeric: true, sortable: true },
+      { key: "mvp", label: labels.mvp, numeric: false, sortable: true },
+      { key: "streak", label: labels.streak, numeric: true, sortable: true },
+    ];
+  }
+  return [
+    { key: "subject", label: labels.player, numeric: false, sortable: true },
+    { key: "team", label: labels.team, numeric: false, sortable: true },
+    { key: "gamesPlayed", label: labels.gamesPlayedShort, numeric: true, sortable: true },
+    { key: "goals", label: labels.goals, numeric: true, sortable: true },
+    { key: "assists", label: labels.assists, numeric: true, sortable: true },
+    { key: "defenses", label: labels.defenses, numeric: true, sortable: true },
+    { key: "goalsAvg", label: labels.goalsAvg, numeric: true, sortable: true },
+    { key: "assistsAvg", label: labels.assistsAvg, numeric: true, sortable: true },
+    { key: "defensesAvg", label: labels.defensesAvg, numeric: true, sortable: true },
+    // The MVP column is derived client-side (star on the top scorer), so it
+    // is not sortable.
+    { key: "power", label: labels.mvp, numeric: true, sortable: false },
+    { key: "streak", label: labels.streak, numeric: true, sortable: true },
+  ];
+}
+
+function getValue(row: RankingRow, key: SortKey): string | number {
+  switch (key) {
+    case "subject":
+      return row.subject;
+    case "team":
+      return row.team ?? "—";
+    case "gamesPlayed":
+      return row.gamesPlayed;
+    case "wins":
+      return row.wins;
+    case "losses":
+      return row.losses;
+    case "goals":
+      return row.goals;
+    case "goalsAgainst":
+      return row.goalsAgainst;
+    case "assists":
+      return row.assists;
+    case "defenses":
+      return row.defenses;
+    case "goalsAvg":
+      return row.goalsAvg;
+    case "assistsAvg":
+      return row.assistsAvg;
+    case "defensesAvg":
+      return row.defensesAvg;
+    case "power":
+      return row.power;
+    case "streak":
+      return row.streak;
+    case "mvp":
+      return row.mvp ?? "—";
+  }
+}
+
+/** Trim trailing zeros from a rounded decimal (2.50 → 2.5, 2.00 → 2). */
+function formatDecimal(v: number): string {
+  if (Number.isInteger(v)) return String(v);
+  return v.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+const SORT_BUTTON_STYLE: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  padding: 0,
+  color: "inherit",
+  fontWeight: "inherit",
+  fontFamily: "inherit",
+  fontSize: "inherit",
+  textAlign: "inherit",
 };
 
 export function RankingsClient({
@@ -54,15 +185,67 @@ export function RankingsClient({
 }: Props) {
   const [mode, setMode] = useState<Mode>("teams");
   const [tournamentId, setTournamentId] = useState<"all" | number>("all");
+  const [teamFilter, setTeamFilter] = useState<"all" | string>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("power");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const source = mode === "teams" ? teams : players;
 
-  // Filter rows by tournament membership; rows with no tournament
-  // participation appear under "All tournaments".
+  const columns = useMemo(() => buildColumns(mode, labels), [mode, labels]);
+
+  // Team dropdown options are derived from the player rows (unique names).
+  const teamOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const r of players) if (r.team) names.add(r.team);
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [players]);
+
+  // Filter by tournament membership and (players only) team name.
   const visible = useMemo(() => {
-    if (tournamentId === "all") return source;
-    return source.filter((r) => r.tournamentIds.includes(tournamentId));
-  }, [source, tournamentId]);
+    let rows = source;
+    if (tournamentId !== "all") {
+      rows = rows.filter((r) => r.tournamentIds.includes(tournamentId));
+    }
+    if (mode === "players" && teamFilter !== "all") {
+      rows = rows.filter((r) => r.team === teamFilter);
+    }
+    return rows;
+  }, [source, tournamentId, teamFilter, mode]);
+
+  const sorted = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    const def = columns.find((c) => c.key === sortKey);
+    const numeric = def?.numeric ?? false;
+    const copy = [...visible];
+    copy.sort((a, b) => {
+      const va = getValue(a, sortKey);
+      const vb = getValue(b, sortKey);
+      if (numeric) {
+        return (Number(va) - Number(vb)) * dir;
+      }
+      return String(va).localeCompare(String(vb)) * dir;
+    });
+    return copy;
+  }, [visible, sortKey, sortDir, columns]);
+
+  // MVP in players mode = the visible player with the highest power score.
+  const playerMvpId = useMemo(() => {
+    if (mode !== "players" || sorted.length === 0) return null;
+    return sorted.reduce(
+      (best, r) => (r.power > best.power ? r : best),
+      sorted[0],
+    ).id;
+  }, [mode, sorted]);
+
+  const onSort = (col: ColumnDef) => {
+    if (!col.sortable) return;
+    if (sortKey === col.key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(col.key);
+      setSortDir(col.numeric ? "desc" : "asc");
+    }
+  };
 
   // CSV cell escaping per RFC 4180.
   const csvEscape = (v: string | number): string => {
@@ -71,16 +254,18 @@ export function RankingsClient({
   };
 
   const exportCsv = () => {
-    const header = Object.keys(COLUMN_HEADERS).join(",");
-    const body = visible
+    const header = columns.map((c) => csvEscape(c.label)).join(",");
+    const body = sorted
       .map((r) =>
-        [
-          csvEscape(r.subject),
-          csvEscape(r.team ?? "—"),
-          csvEscape(r.points),
-          csvEscape(r.power),
-          csvEscape(r.streak),
-        ].join(","),
+        columns
+          .map((c) => {
+            if (c.key === "subject") return csvEscape(r.subject);
+            if (c.key === "mvp" && mode === "players") {
+              return csvEscape(r.id === playerMvpId ? labels.mvp : "");
+            }
+            return csvEscape(getValue(r, c.key));
+          })
+          .join(","),
       )
       .join("\n");
     const blob = new Blob([`${header}\n${body}`], {
@@ -96,11 +281,10 @@ export function RankingsClient({
     URL.revokeObjectURL(url);
   };
 
-  const renderRow = (row: RankingRow) => {
-    const href =
-      mode === "teams" ? `/teams/${row.id}` : `/players/${row.id}`;
-    return (
-      <tr key={row.id}>
+  const renderCell = (row: RankingRow, col: ColumnDef) => {
+    if (col.key === "subject") {
+      const href = mode === "teams" ? `/teams/${row.id}` : `/players/${row.id}`;
+      return (
         <td>
           <Link
             href={href}
@@ -109,18 +293,50 @@ export function RankingsClient({
             {row.subject}
           </Link>
         </td>
-        <td>{row.team ?? "—"}</td>
-        <td style={{ textAlign: "right" }}>{row.points}</td>
-        <td style={{ textAlign: "right" }}>{row.power.toFixed(1)}</td>
+      );
+    }
+    if (col.key === "mvp" && mode === "players") {
+      const isMvp = row.id === playerMvpId;
+      return (
+        <td style={{ textAlign: "right" }}>
+          {isMvp ? (
+            <span style={{ color: "var(--ps-accent)", fontWeight: 700 }}>
+              ★ {labels.mvp}
+            </span>
+          ) : (
+            "—"
+          )}
+        </td>
+      );
+    }
+    if (col.key === "mvp") {
+      return <td>{row.mvp ?? "—"}</td>;
+    }
+    if (col.key === "streak") {
+      return (
         <td style={{ textAlign: "right" }}>
           {row.streak > 0 ? `W${row.streak}` : "—"}
         </td>
-      </tr>
+      );
+    }
+    const v = getValue(row, col.key);
+    return (
+      <td style={col.numeric ? { textAlign: "right" } : undefined}>
+        {typeof v === "number"
+          ? col.numeric &&
+            (col.key === "goalsAvg" ||
+              col.key === "assistsAvg" ||
+              col.key === "defensesAvg" ||
+              col.key === "power")
+            ? formatDecimal(v)
+            : v
+          : v}
+      </td>
     );
   };
 
   return (
-    <main style={{ maxWidth: 960, margin: "0 auto", padding: "32px 20px" }}>
+    <main style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 20px" }}>
       <header style={{ marginBottom: 16 }}>
         <h1 style={{ margin: 0 }}>{labels.title}</h1>
       </header>
@@ -157,6 +373,27 @@ export function RankingsClient({
           </select>
         </label>
 
+        {/* Team filter (players mode only — each team row is already a team) */}
+        {mode === "players" && (
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 13, color: "var(--ps-text-muted)" }}>
+              {labels.filterTeam}
+            </span>
+            <select
+              value={teamFilter}
+              onChange={(e) => setTeamFilter(e.target.value)}
+              className="ps-input"
+            >
+              <option value="all">{labels.allTeams}</option>
+              {teamOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         {/* Type toggle */}
         <div role="group" aria-label="Mode">
           <button
@@ -188,7 +425,7 @@ export function RankingsClient({
         <button
           type="button"
           onClick={exportCsv}
-          disabled={visible.length === 0}
+          disabled={sorted.length === 0}
           className="ps-btn ps-btn--secondary"
           style={{ marginLeft: "auto" }}
         >
@@ -196,24 +433,55 @@ export function RankingsClient({
         </button>
       </div>
 
-      {visible.length === 0 ? (
+      {sorted.length === 0 ? (
         <p>{labels.noData}</p>
       ) : (
-        <div className="ps-card" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="ps-card" style={{ padding: 0, overflowX: "auto" }}>
           <table className="ps-table">
             <thead>
               <tr>
-                <th>{COLUMN_HEADERS.subject}</th>
-                <th>{COLUMN_HEADERS.team}</th>
-                <th style={{ textAlign: "right" }}>{COLUMN_HEADERS.points}</th>
-                <th style={{ textAlign: "right" }}>{COLUMN_HEADERS.power}</th>
-                <th style={{ textAlign: "right" }}>{COLUMN_HEADERS.streak}</th>
+                {columns.map((col) => (
+                  <th
+                    key={col.key}
+                    style={col.numeric ? { textAlign: "right" } : undefined}
+                  >
+                    {col.sortable ? (
+                      <button
+                        type="button"
+                        onClick={() => onSort(col)}
+                        style={SORT_BUTTON_STYLE}
+                        aria-label={`${labels.sortToggle}: ${col.label}`}
+                        title={labels.sortToggle}
+                      >
+                        {col.label}
+                        {sortKey === col.key
+                          ? sortDir === "asc"
+                            ? " ▲"
+                            : " ▼"
+                          : ""}
+                      </button>
+                    ) : (
+                      col.label
+                    )}
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody>{visible.map(renderRow)}</tbody>
+            <tbody>
+              {sorted.map((row) => (
+                <tr key={row.id}>
+                  {columns.map((col) => (
+                    <Fragment key={col.key}>{renderCell(row, col)}</Fragment>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
           </table>
         </div>
       )}
     </main>
   );
 }
+
+// Small local Fragment alias avoids importing React wholesale.
+import { Fragment } from "react";

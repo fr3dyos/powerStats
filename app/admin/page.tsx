@@ -129,7 +129,7 @@ const { dict } = await getServerLocale();
   // hub, with role-aware copy.
   const tiles = [
     {
-      href: "/tournaments",
+      href: "/admin/tournaments",
       icon: "01",
       title: dashboard.tournaments,
       copy: dashboard.tournamentsCopy,
@@ -150,14 +150,14 @@ const { dict } = await getServerLocale();
       footer: dashboard.playersFooter,
     },
     {
-      href: liveConsoleHref,
+      href: "/admin/games",
       icon: "04",
       title: dashboard.liveScoring,
       copy: dashboard.liveScoringCopy,
       footer: dashboard.liveScoringFooter,
     },
     {
-      href: "/tournaments",
+      href: "/admin/tournaments",
       icon: "05",
       title: dashboard.schedules,
       copy: dashboard.schedulesCopy,
