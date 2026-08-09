@@ -7,6 +7,7 @@ import {
   formatDate,
   formatDateRange,
   gamesApi,
+  phasesApi,
   teamsApi,
   teamColor,
   tournamentsApi,
@@ -41,10 +42,11 @@ export default async function TournamentDetailPage({
   const id = Number(rawId);
   if (!Number.isFinite(id)) notFound();
 
-  const [tournament, teams, games] = await Promise.all([
+  const [tournament, teams, games, phases] = await Promise.all([
     tournamentsApi.get(id).catch(() => null),
     teamsApi.listByTournament(id).catch(() => []),
     gamesApi.listByTournament(id).catch(() => []),
+    phasesApi.listByTournament(id).catch(() => []),
   ]);
 
   if (!tournament) notFound();
@@ -147,13 +149,24 @@ export default async function TournamentDetailPage({
                   {trn.classification}
                 </h2>
               </div>
-              <Link
-                href={`/tournaments/${tournament.id}/bracket`}
-                className="ps-btn ps-btn--secondary"
-                style={{ fontSize: 12, padding: "6px 12px" }}
-              >
-                {common.viewBracket}
-              </Link>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {phases.length > 0 ? (
+                  <Link
+                    href={`/tournaments/${tournament.id}/phases/${phases[0].id}/standings`}
+                    className="ps-btn ps-btn--secondary"
+                    style={{ fontSize: 12, padding: "6px 12px" }}
+                  >
+                    {dict.standings.title}
+                  </Link>
+                ) : null}
+                <Link
+                  href={`/tournaments/${tournament.id}/bracket`}
+                  className="ps-btn ps-btn--secondary"
+                  style={{ fontSize: 12, padding: "6px 12px" }}
+                >
+                  {common.viewBracket}
+                </Link>
+              </div>
             </header>
             <table className="ps-table">
               <thead>

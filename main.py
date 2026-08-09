@@ -10,6 +10,10 @@ Environment variables (read from .env or shell):
 - SUPABASE_SERVICE_ROLE_KEY: Service role key for admin operations (server-only)
 """
 
+# Apply supabase-py compatibility patch (accepts sb_* format keys) before any
+# supabase imports so the monkey-patch is in place for all subsequent usage.
+import compat  # noqa: F401
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

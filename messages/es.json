@@ -116,6 +116,19 @@
     "statusCompleted": "Completado",
     "noMatches": "Ningún torneo coincide con tus filtros."
   },
+  "standings": {
+    "eyebrow": "Clasificación",
+    "title": "Clasificación de la fase",
+    "subtitle": "Clasificación de la",
+    "phaseTitle": "Grupo",
+    "pos": "Pos",
+    "played": "PJ",
+    "draws": "E",
+    "points": "Pts",
+    "spirit": "Espíritu",
+    "tiebreakers": "Desempates",
+    "noStandings": "Aún no hay clasificación disponible para esta fase."
+  },
   "team": {
     "title": "Perfil de equipo",
     "profile": "Perfil de equipo",
@@ -128,6 +141,11 @@
     "playersCount": "jugadores",
     "noPlayersCopy": "Aún no hay jugadores registrados.",
     "noGamesCopy": "Aún no hay partidos programados.",
+    "ties": "Empates",
+    "pf": "GF",
+    "pa": "GA",
+    "diff": "Dif",
+    "power": "Poder",
     "tournamentHub": "← Centro del torneo",
     "topScorers": "Máximos anotadores",
     "topAssists": "Más asistencias",
@@ -175,7 +193,15 @@
     "title": "Playoffs y rondas en vivo",
     "subtitle": "Cada partido de la fase de llaves — cuartos de final, semifinales, finales y los partidos de consolación que deciden el 3.º y 5.º lugar.",
     "noBracketGames": "Aún no hay partidos de llave",
-    "noBracketGamesCopy": "Usa el panel de administración para generar la llave cuando termine el round-robin."
+    "noBracketGamesCopy": "Usa el panel de administración para generar la llave cuando termine el round-robin.",
+    "consolationTitle": "Llaves de consolación",
+    "consolationSubtitle": "Llaves separadas para los partidos de consolación que determinan del3.º al 9.º lugar.",
+    "thirdPlace": "3.º lugar",
+    "fifthPlace": "5.º lugar",
+    "seventhPlace": "7.º lugar",
+    "ninthPlace": "9.º lugar",
+    "placementFinal": "Final de consolación",
+    "forPlace": "por {place}"
   },
   "match": {
     "title": "Partido",
@@ -189,6 +215,11 @@
     "period": "Periodo",
     "event": "Evento",
     "points": "Pts",
+    "playerOfTheMatch": "Jugador del partido",
+    "topScorers": "Máximos goleadores",
+    "topAssists": "Máximos asistentes",
+    "matchEvolution": "Evolución del partido",
+    "minutesShort": "min",
     "backToTournament": "← Volver al torneo",
     "backToBracket": "← Volver a la llave"
   },

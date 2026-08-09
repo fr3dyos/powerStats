@@ -21,9 +21,12 @@ GitHub: [@fr3dyos](https://github.com/fr3dyos)
 
 ### Public Site
 - Tournament browser with search and filters
-- Interactive brackets with game results
+- Interactive brackets (including consolation placement brackets) with game results
+- Per-phase standings with multi-group display, full columns
+  (Pos/Team/P/W/D/L/GF/GA/Diff/Pts/Spirit) and tiebreaker rules
 - Player and team profiles with cross-tournament history
 - Live game tracking and event streams
+- Game detail with Player of the Match, top scorers, and match-evolution chart
 - Sortable leaderboards (teams/players) with CSV export and year filter
 - Multi-language support (English, Spanish, Portuguese)
 - Light/dark theme
@@ -63,6 +66,7 @@ GitHub: [@fr3dyos](https://github.com/fr3dyos)
 ```
 powerstats/
 ├── main.py              # FastAPI app entry point (mounts all routers)
+├── compat.py            # supabase-py shim — accepts sb_* format API keys
 ├── database.py          # SQLAlchemy engine & session
 ├── models.py            # SQLAlchemy ORM models
 ├── schemas.py           # Pydantic schemas
@@ -86,7 +90,7 @@ powerstats/
 │   ├── players/         # Player profiles
 │   ├── rankings/        # Cross-tournament leaderboards (CSV export)
 │   ├── teams/           # Team directory + profiles
-│   └── tournaments/     # Tournament hub, bracket, public leaderboard
+│   └── tournaments/     # Tournament hub, bracket, phase standings, public leaderboard
 ├── middleware.ts        # Supabase session refresh + auth gate
 ├── messages/            # i18n dictionaries (en/es/pt-BR)
 ├── supabase/migrations/ # SQL migrations (apply via `supabase db push`)
@@ -110,12 +114,14 @@ powerstats/
 - Direct PostgreSQL connection to Supabase (writes bypass PostgREST/RLS)
 - Supabase integration for Auth, Storage, and Realtime
 - Comprehensive error handling and validation
+- `compat.py` startup shim accepts modern `sb_*` format API keys in supabase-py
+  (patched into `main.py` before any Supabase client is created)
 
 ### Database Schema
 - **tournaments**: Tournament metadata and dates
 - **teams**: Teams with tournament association
 - **players**: Player profiles with team assignment
-- **games**: Match records with scores, rules, and clock columns (`is_live`, `clock_running`, `clock_started_at`, `clock_elapsed`)
+- **games**: Match records with scores, rules, clock columns (`is_live`, `clock_running`, `clock_started_at`, `clock_elapsed`), and placement columns (`is_placement`, `placement_position`)
 - **game_events**: Live scoring events (goals, assists, defenses, timeouts, halves)
 - **phases**: Tournament phases (round-robin, bracket)
 - **groups**: Group assignments within phases

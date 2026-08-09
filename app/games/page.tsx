@@ -1,17 +1,19 @@
 "use client";
 
 // Public games index — pulls games across every tournament and shows the
-// basics (date, matchup, score, tournament, status). Backend Game rows may
-// or may not include `home_team` / `away_team` (depending on the route);
-// when missing we render ids and let the user drill into each game for
-// the rich record.
+// basics (date, matchup, score, tournament, status). The backend `/games`
+// list route returns flat `Game` rows (no nested `home_team`/`away_team`),
+// so we fetch the teams per tournament and resolve names client-side.
+// Admin/scorekeeper actions (New game / Enter result) are only shown to
+// authenticated users.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-import { formatDate, type Game, type Tournament } from "@/utils/api-shared";
+import { formatDate, type Game, type Team, type Tournament } from "@/utils/api-shared";
 import { mapWithConcurrency } from "@/utils/async";
 import { AppShell } from "@/app/_components/AppShell";
+import { createClient } from "@/utils/supabase/client";
 
 // --- Tiny fetch wrapper (mirrors the one in /teams; consolidated when
 // both pages move to use `apiFetch` from utils/api.ts).
@@ -48,6 +50,7 @@ export default function GamesPage() {
   const [rows, setRows] = useState<DisplayRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthed, setIsAuthed] = useState(false);
 
   // New-game inline form state — kept local; replaced by a full page when
   // the create flow lands elsewhere.
@@ -57,16 +60,35 @@ export default function GamesPage() {
     setLoading(true);
     setError(null);
     try {
+      // Auth check: only scorekeepers/admins should see create / scoring.
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.auth.getSession();
+        setIsAuthed(Boolean(data.session));
+      } catch {
+        setIsAuthed(false);
+      }
+
       const tournaments = await api<Tournament[]>("/api/tournaments").catch(
         () => [] as Tournament[],
       );
+
+      // Fetch teams per tournament to resolve team ids → names.
+      const teamLists = await mapWithConcurrency(tournaments, 4, (t) =>
+        api<Team[]>(`/api/teams?tournament_id=${t.id}`).catch(() => [] as Team[]),
+      );
+      const teamNames = new Map<number, string>();
+      for (const list of teamLists) {
+        for (const team of list) teamNames.set(team.id, team.name);
+      }
+
       const lists = await mapWithConcurrency(tournaments, 4, (t) =>
         api<Game[]>(`/api/games?tournament_id=${t.id}`).catch(() => []),
       );
       const flat: DisplayRow[] = lists.flat().map((g) => ({
         game: g,
-        homeName: g.home_team?.name ?? `#${g.home_team_id}`,
-        awayName: g.away_team?.name ?? `#${g.away_team_id}`,
+        homeName: teamNames.get(g.home_team_id) ?? `#${g.home_team_id}`,
+        awayName: teamNames.get(g.away_team_id) ?? `#${g.away_team_id}`,
         tournamentName:
           tournaments.find((t) => t.id === g.tournament_id)?.name ?? "—",
       }));
@@ -115,16 +137,18 @@ export default function GamesPage() {
         }}
       >
         <h1 style={{ margin: 0 }}>Games</h1>
-        <button
-          type="button"
-          className="ps-btn ps-btn--primary"
-          onClick={() => setShowNew((v) => !v)}
-        >
-          {showNew ? "Cancel" : "New game"}
-        </button>
+        {isAuthed ? (
+          <button
+            type="button"
+            className="ps-btn ps-btn--primary"
+            onClick={() => setShowNew((v) => !v)}
+          >
+            {showNew ? "Cancel" : "New game"}
+          </button>
+        ) : null}
       </header>
 
-      {showNew ? (
+      {showNew && isAuthed ? (
         <div className="ps-card" style={{ marginBottom: 16 }}>
           <p style={{ margin: 0, color: "var(--ps-text-muted)" }}>
             Schedule a new game from a tournament hub. The bulk create form
@@ -221,13 +245,15 @@ export default function GamesPage() {
                       >
                         View
                       </Link>
-                      <Link
-                        href={`/admin/games/${game.id}/score`}
-                        className="ps-btn ps-btn--secondary"
-                        style={{ fontSize: 12, padding: "4px 10px" }}
-                      >
-                        Enter result
-                      </Link>
+                      {isAuthed ? (
+                        <Link
+                          href={`/admin/games/${game.id}/score`}
+                          className="ps-btn ps-btn--secondary"
+                          style={{ fontSize: 12, padding: "4px 10px" }}
+                        >
+                          Enter result
+                        </Link>
+                      ) : null}
                     </td>
                   </tr>
                 );

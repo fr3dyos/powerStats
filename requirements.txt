@@ -10,6 +10,7 @@ psycopg2-binary==2.9.9
 
 # Supabase
 supabase==2.4.0
+h2>=4.1.0  # required by supabase-py's gotrue (http2=True)
 
 # File uploads
 python-multipart==0.0.9

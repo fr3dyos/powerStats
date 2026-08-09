@@ -116,6 +116,19 @@
     "statusCompleted": "Completed",
     "noMatches": "No tournaments match your filters."
   },
+  "standings": {
+    "eyebrow": "Standings",
+    "title": "Phase standings",
+    "subtitle": "Standings for the",
+    "phaseTitle": "Group",
+    "pos": "Pos",
+    "played": "P",
+    "draws": "D",
+    "points": "Pts",
+    "spirit": "Spirit",
+    "tiebreakers": "Tiebreakers",
+    "noStandings": "No standings available for this phase yet."
+  },
   "team": {
     "title": "Team profile",
     "profile": "Team profile",
@@ -128,6 +141,11 @@
     "playersCount": "players",
     "noPlayersCopy": "No players registered yet.",
     "noGamesCopy": "No games scheduled yet.",
+    "ties": "Ties",
+    "pf": "GF",
+    "pa": "GA",
+    "diff": "Diff",
+    "power": "Power",
     "tournamentHub": "← Tournament hub",
     "topScorers": "Top scorers",
     "topAssists": "Top assists",
@@ -175,7 +193,15 @@
     "title": "Playoffs & live rounds",
     "subtitle": "Every fixture from the bracket phase — quarterfinals, semifinals, finals, and the consolation games that decide 3rd and 5th place.",
     "noBracketGames": "No bracket games yet",
-    "noBracketGamesCopy": "Use the admin dashboard to generate the bracket once the round-robin finishes."
+    "noBracketGamesCopy": "Use the admin dashboard to generate the bracket once the round-robin finishes.",
+    "consolationTitle": "Consolation Brackets",
+    "consolationSubtitle": "Separate brackets for placement games to determine3rd through 9th place.",
+    "thirdPlace": "3rd Place",
+    "fifthPlace": "5th Place",
+    "seventhPlace": "7th Place",
+    "ninthPlace": "9th Place",
+    "placementFinal": "Placement Final",
+    "forPlace": "for {place}"
   },
   "match": {
     "title": "Match",
@@ -189,6 +215,11 @@
     "period": "Period",
     "event": "Event",
     "points": "Pts",
+    "playerOfTheMatch": "Player of the Match",
+    "topScorers": "Top scorers",
+    "topAssists": "Top assists",
+    "matchEvolution": "Match evolution",
+    "minutesShort": "min",
     "backToTournament": "← Back to tournament",
     "backToBracket": "← Back to bracket"
   },

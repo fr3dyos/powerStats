@@ -66,6 +66,34 @@ function groupRounds(games: Game[]) {
   }));
 }
 
+/** Ordinal position map for placement bracket labels. */
+const PLACEMENT_LABELS: Record<number, string> = {
+  1: "1st Place",
+  2: "2nd Place",
+  3: "3rd Place",
+  4: "4th Place",
+  5: "5th Place",
+  6: "6th Place",
+  7: "7th Place",
+  8: "8th Place",
+  9: "9th Place",
+  10: "10th Place",
+};
+
+/** Group placement games by their placement_position for separate consolation brackets. */
+function groupPlacementGames(games: Game[]): Map<number, Game[]> {
+  const groups = new Map<number, Game[]>();
+  for (const g of games) {
+    const pos = g.placement_position ?? 3;
+    const arr = groups.get(pos) ?? [];
+    arr.push(g);
+    groups.set(pos, arr);
+  }
+  // Sort positions: 10th, 8th, 6th, 4th, 2nd first (higher = lower placement)
+  // then 3rd, 5th, 7th, 9th (lower number = higher placement)
+  return groups;
+}
+
 /**
  * Draws the tree links between two adjacent rounds using CSS border lines.
  * Each left-round match gets a horizontal stub; each pair of stubs is joined
@@ -128,9 +156,16 @@ const { dict } = await getServerLocale();
   const teamMap = new Map<number, { id: number; name: string }>(
     teams.map((t) => [t.id, { id: t.id, name: t.name }] as const),
   );
-  const bracketGames = games.filter((g) => g.start_time !== null);
+  // Separate main bracket games from placement/consolation games.
+  const bracketGames = games.filter(
+    (g) => g.start_time !== null && !g.is_placement,
+  );
+  const placementGames = games.filter(
+    (g) => g.start_time !== null && g.is_placement,
+  );
   const liveGames = games.filter((g) => !g.is_completed);
   const rounds = groupRounds(bracketGames);
+  const placementGroups = groupPlacementGames(placementGames);
 
   return (
 <AppShell
@@ -325,7 +360,142 @@ return (
           </div>
         </div>
 
-        {bracketGames.length === 0 ? (
+        {/* Consolation / placement bracket sections */}
+        {placementGroups.size > 0 ? (
+          <div style={{ marginTop: 32 }}>
+            <h2 style={{ marginTop: 0, marginBottom: 16 }}>
+              {brk.consolationTitle}
+            </h2>
+            <p style={{ color: "var(--ps-text-muted)", marginBottom: 16 }}>
+              {brk.consolationSubtitle}
+            </p>
+            {[...placementGroups.entries()].map(([pos, groupGames]) => {
+              const positionLabel =
+                PLACEMENT_LABELS[pos] ?? `${pos}${pos === 2 ? "nd" : pos === 3 ? "rd" : "th"} Place`;
+              const groupRoundsList = groupRounds(groupGames);
+              return (
+                <div
+                  key={pos}
+                  className="ps-card"
+                  style={{ padding: 16, marginBottom: 16 }}
+                >
+                  <h3 style={{ marginTop: 0, marginBottom: 12 }}>
+                    {positionLabel}
+                  </h3>
+                  <div className="ps-bracket">
+                    {groupRoundsList.map((round, rIndex) => (
+                      <Fragment key={round.label}>
+                        <div className="ps-bracket__round">
+                          <div className="ps-bracket__round-title">
+                            {round.label}
+                          </div>
+                          <div className="ps-bracket__round-matches">
+                            {round.games.map((g) => {
+                              const home = teamMap.get(g.home_team_id);
+                              const away = teamMap.get(g.away_team_id);
+                              const winner =
+                                g.is_completed &&
+                                g.home_score !== g.away_score
+                                  ? g.home_score > g.away_score
+                                    ? "home"
+                                    : "away"
+                                  : null;
+                              return (
+                                <div
+                                  key={g.id}
+                                  className="ps-bracket__match"
+                                  style={{
+                                    color: "inherit",
+                                    borderLeftColor:
+                                      winner === "home" || winner === "away"
+                                        ? "var(--ps-secondary)"
+                                        : "var(--ps-border)",
+                                  }}
+                                >
+                                  <Link
+                                    href={`/games/${g.id}`}
+                                    style={{
+                                      textDecoration: "none",
+                                      color: "inherit",
+                                    }}
+                                  >
+                                    <div
+                                      className={
+                                        winner === "home"
+                                          ? "ps-bracket__team ps-bracket__team--winner"
+                                          : "ps-bracket__team"
+                                      }
+                                    >
+                                      <span>{home?.name ?? "TBD"}</span>
+                                      <span className="ps-bracket__team-score">
+                                        {g.home_score}
+                                      </span>
+                                    </div>
+                                    <div
+                                      className={
+                                        winner === "away"
+                                          ? "ps-bracket__team ps-bracket__team--winner"
+                                          : "ps-bracket__team"
+                                      }
+                                    >
+                                      <span>{away?.name ?? "TBD"}</span>
+                                      <span className="ps-bracket__team-score">
+                                        {g.away_score}
+                                      </span>
+                                    </div>
+                                  </Link>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "space-between",
+                                      gap: 8,
+                                      fontSize: 11,
+                                      color: "var(--ps-text-muted)",
+                                      marginTop: 4,
+                                    }}
+                                  >
+                                    <span>
+                                      {formatDate(g.start_time)}
+                                      {g.field_number
+                                        ? ` · ${common.field} ${g.field_number}`
+                                        : ""}
+                                    </span>
+                                    {canScore ? (
+                                      <Link
+                                        href={`/admin/games/${g.id}/score`}
+                                        title={matchDict.scoreAdmin}
+                                        style={{
+                                          fontSize: 11,
+                                          fontWeight: 700,
+                                          textDecoration: "none",
+                                          color: "var(--ps-secondary)",
+                                        }}
+                                      >
+                                        {matchDict.score}
+                                      </Link>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        {rIndex < groupRoundsList.length - 1 ? (
+                          <ConnectorColumn
+                            leftCount={groupRoundsList[rIndex].games.length}
+                          />
+                        ) : null}
+                      </Fragment>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {bracketGames.length === 0 && placementGames.length === 0 ? (
           <div
             className="ps-card"
             style={{ marginTop: 24, textAlign: "center" }}

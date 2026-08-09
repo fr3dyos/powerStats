@@ -26,6 +26,7 @@ export * from "./api-shared";
 import type {
   Game,
   GameEvent,
+  Phase,
   Player,
   Team,
   Tournament,
@@ -338,4 +339,35 @@ export const gamesApi = {
       method: "POST",
       body: { tournament_id: tournamentId, games },
     }),
+};
+
+export const phasesApi = {
+  listByTournament: (tournamentId: number) =>
+    apiFetch<Phase[]>(`/tournaments/${tournamentId}/phases`),
+  standings: (phaseId: number) =>
+    apiFetch<{
+      phase_id: number;
+      phase_name: string;
+      phase_type: string;
+      groups: Array<{
+        group_id: number | null;
+        group_name: string;
+        rows: Array<{
+          position: number;
+          team_id: number;
+          team_name: string | null;
+          played: number;
+          wins: number;
+          draws: number;
+          losses: number;
+          points: number;
+          goals_for: number;
+          goals_against: number;
+          goal_difference: number;
+          spirit_average: number;
+        }>;
+      }>;
+      tiebreakers: string[];
+      generated_at: string;
+    }>(`/phases/${phaseId}/standings`),
 };

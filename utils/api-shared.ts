@@ -58,6 +58,8 @@ export type Game = {
   field_number: number | null;
   is_completed: boolean;
   is_live: boolean;
+  is_placement: boolean;
+  placement_position: number | null;
   clock_running: boolean;
   clock_started_at: string | null;
   clock_elapsed: number;

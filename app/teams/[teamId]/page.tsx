@@ -13,16 +13,13 @@ import {
   teamColor,
   tournamentsApi,
   type Game,
-  type Team,
+  type Player,
 } from "@/utils/api";
 
 export const dynamic = "force-dynamic";
 
 type Params = { teamId: string };
 
-// Roles allowed to see team-level admin actions. Mirrors the same allowlist
-// used on /admin/* routes — kept inline so this page does not silently grant
-// privileges if the helper set changes elsewhere.
 const ADMIN_ACTION_ROLES = new Set(["admin", "scorekeeper"]);
 
 export default async function TeamProfilePage({
@@ -37,9 +34,6 @@ export default async function TeamProfilePage({
   const team = await teamsApi.get(teamId).catch(() => null);
   if (!team) notFound();
 
-  // Read the current viewer's role so the admin actions panel can be gated.
-  // getAuthedUser() never throws on logged-out callers — it returns role: null,
-  // which keeps the panel hidden for public visitors.
   const cookieStore = await cookies();
   const { role } = await getAuthedUser(cookieStore);
   const canAdmin = role !== null && ADMIN_ACTION_ROLES.has(role);
@@ -55,33 +49,90 @@ export default async function TeamProfilePage({
     teamsApi.listByTournament(team.tournament_id).catch(() => []),
   ]);
   const teamNameById = new Map(
-    tournamentTeams.map((t) => [t.id, t.name] as const),
+    tournamentTeams.map((tm) => [tm.id, tm.name] as const),
   );
 
-  const allGames: Game[] = [...(team.home_games ?? []), ...(team.away_games ?? [])]
-    .sort((a, b) => {
-      const at = a.start_time ? Date.parse(a.start_time) : 0;
-      const bt = b.start_time ? Date.parse(b.start_time) : 0;
-      return at - bt;
-    });
+  const allGames: Game[] = [
+    ...(team.home_games ?? []),
+    ...(team.away_games ?? []),
+  ].sort((a, b) => {
+    const at = a.start_time ? Date.parse(a.start_time) : 0;
+    const bt = b.start_time ? Date.parse(b.start_time) : 0;
+    return at - bt;
+  });
 
-  const wins = allGames.filter(
-    (g) =>
-      g.is_completed &&
-      ((g.home_team_id === team.id && g.home_score > g.away_score) ||
-        (g.away_team_id === team.id && g.away_score > g.home_score)),
-  ).length;
-  const losses = allGames.filter(
-    (g) =>
-      g.is_completed &&
-      ((g.home_team_id === team.id && g.home_score < g.away_score) ||
-        (g.away_team_id === team.id && g.away_score < g.home_score)),
-  ).length;
+  // --- Team stats matching the tournament standings table (W, L, T, GF, PA, Diff, Power).
+  let wins = 0;
+  let losses = 0;
+  let ties = 0;
+  let gf = 0;
+  let pa = 0;
+  for (const g of allGames) {
+    if (!g.is_completed) continue;
+    const isHome = g.home_team_id === team.id;
+    const us = isHome ? g.home_score : g.away_score;
+    const them = isHome ? g.away_score : g.home_score;
+    gf += us;
+    pa += them;
+    if (us > them) wins += 1;
+    else if (us < them) losses += 1;
+    else ties += 1;
+  }
+  const diff = gf - pa;
+  const power = wins * 2 + diff / 10;
+  const gp = wins + losses + ties;
+
+  // --- Player stats: fetch aggregated stats for every player on this team.
+  type PlayerRow = {
+    id: number;
+    name: string;
+    jersey: number | null;
+    gamesPlayed: number;
+    goals: number;
+    assists: number;
+    defenses: number;
+    goalsAvg: number;
+    assistsAvg: number;
+    defensesAvg: number;
+    power: number;
+  };
+  const playerRows: PlayerRow[] = [];
+  for (const p of team.players) {
+    const stats = await playersApi.stats(p.id).catch(() => null);
+    const totals = stats?.totals ?? {
+      games_played: 0,
+      goals: 0,
+      assists: 0,
+      defenses: 0,
+      goals_conceded: 0,
+    };
+    const gp = totals.games_played;
+    const goalsAvg = gp > 0 ? Math.round((totals.goals / gp) * 100) / 100 : 0;
+    const assistsAvg = gp > 0 ? Math.round((totals.assists / gp) * 100) / 100 : 0;
+    const defensesAvg =
+      gp > 0 ? Math.round((totals.defenses / gp) * 100) / 100 : 0;
+    const powerScore = totals.goals + totals.assists * 0.7 + totals.defenses * 0.5;
+    playerRows.push({
+      id: p.id,
+      name: formatPlayerName(p),
+      jersey: p.jersey_number,
+      gamesPlayed: gp,
+      goals: totals.goals,
+      assists: totals.assists,
+      defenses: totals.defenses,
+      goalsAvg,
+      assistsAvg,
+      defensesAvg,
+      power: Math.round(powerScore * 10) / 10,
+    });
+  }
+  // Sort players by power descending (team MVP first).
+  playerRows.sort((a, b) => b.power - a.power);
 
   const accent = teamColor(team.name);
 
   return (
-<AppShell
+    <AppShell
       brandSubtitle={`${team.name} · ${t.profile}`}
       authLinks={[
         {
@@ -116,8 +167,8 @@ export default async function TeamProfilePage({
           >
             {team.name.slice(0, 2).toUpperCase()}
           </span>
-<div>
-<span className="ps-section__eyebrow">
+          <div>
+            <span className="ps-section__eyebrow">
               {tournament?.name ?? c.tournament}
             </span>
             <h1
@@ -130,8 +181,6 @@ export default async function TeamProfilePage({
               }}
             >
               {team.name}
-              {/* Monospace team-ID badge so admins can cross-reference the
-                  database tables quickly. */}
               <span
                 className="ps-id-badge"
                 style={{
@@ -152,37 +201,57 @@ export default async function TeamProfilePage({
             {tournament ? (
               <p style={{ color: "var(--ps-text-muted)", marginTop: 4 }}>
                 {formatDate(tournament.start_date)} →{" "}
-                {formatDate(tournament.end_date)} · {tournament.location ?? "—"}
+                {formatDate(tournament.end_date)} ·{" "}
+                {tournament.location ?? "—"}
               </p>
             ) : null}
           </div>
         </div>
 
+        {/* Stat tiles: W-L-T / GF / PA / Diff / GP / Roster / Power */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-            gap: 16,
+            gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+            gap: 12,
             marginBottom: 24,
           }}
         >
-<div className="ps-stat-tile">
+          <div className="ps-stat-tile">
             <span className="ps-stat-tile__value ps-stat-tile__value--accent">
-              {wins}
+              {wins}-{losses}-{ties}
             </span>
-            <span className="ps-stat-tile__label">{t.wins}</span>
+            <span className="ps-stat-tile__label">W-L-T</span>
           </div>
           <div className="ps-stat-tile">
-            <span className="ps-stat-tile__value">{losses}</span>
-            <span className="ps-stat-tile__label">{t.losses}</span>
+            <span className="ps-stat-tile__value">{gf}</span>
+            <span className="ps-stat-tile__label">{t.pf}</span>
+          </div>
+          <div className="ps-stat-tile">
+            <span className="ps-stat-tile__value">{pa}</span>
+            <span className="ps-stat-tile__label">{t.pa}</span>
+          </div>
+          <div className="ps-stat-tile">
+            <span
+              className="ps-stat-tile__value"
+              style={{ color: diff > 0 ? "var(--ps-lime)" : diff < 0 ? "var(--ps-error)" : undefined }}
+            >
+              {diff > 0 ? "+" : ""}
+              {diff}
+            </span>
+            <span className="ps-stat-tile__label">{t.diff}</span>
+          </div>
+          <div className="ps-stat-tile">
+            <span className="ps-stat-tile__value">{gp}</span>
+            <span className="ps-stat-tile__label">{t.gamesPlayed}</span>
           </div>
           <div className="ps-stat-tile">
             <span className="ps-stat-tile__value">{team.players.length}</span>
             <span className="ps-stat-tile__label">{t.rosterSize}</span>
           </div>
           <div className="ps-stat-tile">
-            <span className="ps-stat-tile__value">{allGames.length}</span>
-            <span className="ps-stat-tile__label">{t.gamesPlayed}</span>
+            <span className="ps-stat-tile__value">{Math.round(power * 10) / 10}</span>
+            <span className="ps-stat-tile__label">{t.power}</span>
           </div>
         </div>
 
@@ -199,13 +268,7 @@ export default async function TeamProfilePage({
             >
               {ap.adminActionsCopy}
             </p>
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                flexWrap: "wrap",
-              }}
-            >
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <Link
                 href={`/admin/teams/${teamId}/edit`}
                 className="ps-btn ps-btn--secondary"
@@ -238,7 +301,7 @@ export default async function TeamProfilePage({
                 marginBottom: 12,
               }}
             >
-<h2 style={{ fontSize: 18 }}>{t.roster}</h2>
+              <h2 style={{ fontSize: 18 }}>{t.roster}</h2>
               <span className="ps-pill">
                 {team.players.length} {c.players}
               </span>
@@ -260,8 +323,9 @@ export default async function TeamProfilePage({
               >
                 {team.players
                   .slice()
-                  .sort((a, b) =>
-                    (a.jersey_number ?? 999) - (b.jersey_number ?? 999),
+                  .sort(
+                    (a, b) =>
+                      (a.jersey_number ?? 999) - (b.jersey_number ?? 999),
                   )
                   .map((p) => (
                     <li key={p.id}>
@@ -303,13 +367,19 @@ export default async function TeamProfilePage({
                 justifyContent: "space-between",
               }}
             >
-<h2 style={{ fontSize: 18 }}>{t.matchHistory}</h2>
+              <h2 style={{ fontSize: 18 }}>{t.matchHistory}</h2>
               <span className="ps-pill">
                 {allGames.length} {c.games}
               </span>
             </header>
             {allGames.length === 0 ? (
-              <p style={{ color: "var(--ps-text-muted)", padding: 16, fontSize: 13 }}>
+              <p
+                style={{
+                  color: "var(--ps-text-muted)",
+                  padding: 16,
+                  fontSize: 13,
+                }}
+              >
                 {t.noGamesCopy}
               </p>
             ) : (
@@ -327,11 +397,16 @@ export default async function TeamProfilePage({
                     const isHome = g.home_team_id === team.id;
                     const us = isHome ? g.home_score : g.away_score;
                     const them = isHome ? g.away_score : g.home_score;
-                    const opponentId = isHome ? g.away_team_id : g.home_team_id;
+                    const opponentId = isHome
+                      ? g.away_team_id
+                      : g.home_team_id;
                     const opponent =
                       teamNameById.get(opponentId) ??
                       (isHome ? g.away_team?.name : g.home_team?.name);
-                    let result: { label: string; tone: "win" | "loss" | "pending" };
+                    let result: {
+                      label: string;
+                      tone: "win" | "loss" | "pending";
+                    };
                     if (!g.is_completed) {
                       result = { label: c.pending, tone: "pending" };
                     } else if (us > them) {
@@ -354,7 +429,10 @@ export default async function TeamProfilePage({
                             {opponent ?? "TBD"}
                           </Link>
                         </td>
-                        <td className="ps-table__num" style={{ textAlign: "right" }}>
+                        <td
+                          className="ps-table__num"
+                          style={{ textAlign: "right" }}
+                        >
                           {us}-{them}
                         </td>
                         <td>
@@ -378,6 +456,135 @@ export default async function TeamProfilePage({
             )}
           </div>
         </div>
+
+        {/* Player stats table — same columns as /rankings player view */}
+        {playerRows.length > 0 ? (
+          <div
+            className="ps-card"
+            style={{ padding: 0, overflow: "hidden", marginTop: 24 }}
+          >
+            <header
+              style={{
+                padding: "16px 20px",
+                borderBottom: "1px solid var(--ps-border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <h2 style={{ fontSize: 18 }}>{t.topScorers}</h2>
+              <span className="ps-pill">
+                {playerRows.length} {c.players}
+              </span>
+            </header>
+            <div style={{ overflowX: "auto" }}>
+              <table className="ps-table">
+                <thead>
+                  <tr>
+                    <th>{c.jersey}</th>
+                    <th>{c.player}</th>
+                    <th style={{ textAlign: "right" }}>
+                      {c.gamesPlayedShort}
+                    </th>
+                    <th style={{ textAlign: "right" }}>{c.goals}</th>
+                    <th style={{ textAlign: "right" }}>{c.assists}</th>
+                    <th style={{ textAlign: "right" }}>{c.defenses}</th>
+                    <th style={{ textAlign: "right" }}>
+                      {dict.publicStats.goalAverage}
+                    </th>
+                    <th style={{ textAlign: "right" }}>
+                      {dict.publicStats.assistAverage}
+                    </th>
+                    <th style={{ textAlign: "right" }}>
+                      {dict.publicStats.defenseAverage}
+                    </th>
+                    <th style={{ textAlign: "right" }}>
+                      {dict.publicStats.power}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {playerRows.map((row, idx) => (
+                    <tr key={row.id}>
+                      <td className="ps-table__num">{row.jersey ?? "—"}</td>
+                      <td>
+                        <Link
+                          href={`/players/${row.id}`}
+                          style={{
+                            color: "var(--ps-text)",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {row.name}
+                        </Link>
+                        {idx === 0 && row.power > 0 ? (
+                          <span
+                            style={{
+                              marginLeft: 6,
+                              color: "var(--ps-accent)",
+                              fontSize: 12,
+                            }}
+                            title="Team MVP"
+                          >
+                            ★
+                          </span>
+                        ) : null}
+                      </td>
+                      <td
+                        className="ps-table__num"
+                        style={{ textAlign: "right" }}
+                      >
+                        {row.gamesPlayed}
+                      </td>
+                      <td
+                        className="ps-table__num"
+                        style={{ textAlign: "right" }}
+                      >
+                        {row.goals}
+                      </td>
+                      <td
+                        className="ps-table__num"
+                        style={{ textAlign: "right" }}
+                      >
+                        {row.assists}
+                      </td>
+                      <td
+                        className="ps-table__num"
+                        style={{ textAlign: "right" }}
+                      >
+                        {row.defenses}
+                      </td>
+                      <td
+                        className="ps-table__num"
+                        style={{ textAlign: "right" }}
+                      >
+                        {row.goalsAvg}
+                      </td>
+                      <td
+                        className="ps-table__num"
+                        style={{ textAlign: "right" }}
+                      >
+                        {row.assistsAvg}
+                      </td>
+                      <td
+                        className="ps-table__num"
+                        style={{ textAlign: "right" }}
+                      >
+                        {row.defensesAvg}
+                      </td>
+                      <td
+                        className="ps-table__num"
+                        style={{ textAlign: "right" }}
+                      >
+                        {row.power}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
       </section>
     </AppShell>
   );
