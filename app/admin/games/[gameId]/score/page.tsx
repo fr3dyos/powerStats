@@ -144,6 +144,13 @@ export default async function LiveScoringPage({
           awayPlayers={awayPlayers}
           initialEvents={events}
           canEdit={canEdit}
+          labels={{
+            undoLastEvent: sc.undoLastEvent,
+            endTimeout: sc.endTimeout,
+            advanceHalf: sc.advanceHalf,
+            endGame: sc.endGame,
+            endGameScoreCap: sc.endGameScoreCap,
+          }}
         />
 
         <SpiritEntryPanel

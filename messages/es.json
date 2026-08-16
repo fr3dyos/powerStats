@@ -470,7 +470,7 @@
     "noneSelected": "Ninguna fila seleccionada",
     "oneSelected": "1 fila seleccionada",
     "manySelected": "{count} filas seleccionadas",
-    "deleteConfirm": "¿Eliminar {count} torneo(s) seleccionado(s)? Esta acción aún no está implementada.",
+    "deleteConfirm": "¿Eliminar {count} torneo(s) seleccionado(s)? Esta acción no se puede deshacer.",
     "scheduleGames": "Programar",
     "groupCount": "Cantidad de grupos",
     "advancingTeams": "Equipos que avanzan",
@@ -551,6 +551,11 @@
     "vs": "vs",
     "fieldLabel": "Cancha {number}",
     "readOnlyBanner": "Solo lectura — inicia sesión como admin o anotador para registrar eventos.",
-    "backToTournament": "← Volver al torneo"
+    "backToTournament": "← Volver al torneo",
+    "undoLastEvent": "Deshacer último evento",
+    "endTimeout": "Terminar tiempo fuera",
+    "advanceHalf": "Avanzar mitad",
+    "endGame": "Finalizar partido",
+    "endGameScoreCap": "Finalizar (límite de puntos)"
   }
 }

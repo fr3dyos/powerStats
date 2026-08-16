@@ -470,7 +470,7 @@
     "noneSelected": "Nenhuma linha selecionada",
     "oneSelected": "1 linha selecionada",
     "manySelected": "{count} linhas selecionadas",
-    "deleteConfirm": "Excluir {count} torneio(s) selecionado(s)? Esta ação ainda não foi implementada.",
+    "deleteConfirm": "Excluir {count} torneio(s) selecionado(s)? Esta ação não pode ser desfeita.",
     "scheduleGames": "Agendar",
     "groupCount": "Quantidade de grupos",
     "advancingTeams": "Equipes que avançam",
@@ -551,6 +551,11 @@
     "vs": "vs",
     "fieldLabel": "Quadra {number}",
     "readOnlyBanner": "Somente leitura — entre como admin ou anotador para registrar eventos.",
-    "backToTournament": "← Voltar ao torneio"
+    "backToTournament": "← Voltar ao torneio",
+    "undoLastEvent": "Desfazer último evento",
+    "endTimeout": "Encerrar tempo morto",
+    "advanceHalf": "Avançar tempo",
+    "endGame": "Encerrar jogo",
+    "endGameScoreCap": "Encerrar (limite de pontos)"
   }
 }

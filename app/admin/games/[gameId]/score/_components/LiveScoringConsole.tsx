@@ -19,6 +19,14 @@ type Props = {
   initialEvents: GameEvent[];
   /** True when the current user is allowed to mutate the game. */
   canEdit: boolean;
+  /** i18n labels threaded from server component */
+  labels: {
+    undoLastEvent: string;
+    endTimeout: string;
+    advanceHalf: string;
+    endGame: string;
+    endGameScoreCap: string;
+  };
 };
 
 /** Live scoring console — interactive client wrapper around the read-only
@@ -33,6 +41,7 @@ export function LiveScoringConsole({
   awayPlayers,
   initialEvents,
   canEdit,
+  labels,
 }: Props) {
   const [game, setGame] = useState<Game>(initialGame);
   const [events, setEvents] = useState<GameEvent[]>(initialEvents);
@@ -565,7 +574,7 @@ export function LiveScoringConsole({
               events.length === 0
             }
           >
-            Undo last event
+            {labels.undoLastEvent}
           </button>
           <button
             type="button"
@@ -573,7 +582,7 @@ export function LiveScoringConsole({
             onClick={() => endTimeout()}
             disabled={!canEdit || game.is_completed || busy}
           >
-            End timeout
+            {labels.endTimeout}
           </button>
           <button
             type="button"
@@ -583,7 +592,7 @@ export function LiveScoringConsole({
               !canEdit || game.is_completed || busy || period >= 2
             }
           >
-            Advance half
+            {labels.advanceHalf}
           </button>
         </div>
         <button
@@ -592,7 +601,7 @@ export function LiveScoringConsole({
           onClick={() => endGame()}
           disabled={!canEdit || game.is_completed || busy}
         >
-          {game.game_rule === "score_limit" ? "End (score cap)" : "End game"}
+          {game.game_rule === "score_limit" ? labels.endGameScoreCap : labels.endGame}
         </button>
       </div>
 

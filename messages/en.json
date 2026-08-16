@@ -470,7 +470,7 @@
     "noneSelected": "No rows selected",
     "oneSelected": "1 row selected",
     "manySelected": "{count} rows selected",
-    "deleteConfirm": "Delete {count} selected tournament(s)? This action is not implemented yet.",
+    "deleteConfirm": "Delete {count} selected tournament(s)? This cannot be undone.",
     "scheduleGames": "Schedule",
     "groupCount": "Group count",
     "advancingTeams": "Advancing teams",
@@ -551,6 +551,11 @@
     "vs": "vs",
     "fieldLabel": "Field {number}",
     "readOnlyBanner": "Read-only — sign in as admin or scorekeeper to record events.",
-    "backToTournament": "← Back to tournament"
+    "backToTournament": "← Back to tournament",
+    "undoLastEvent": "Undo last event",
+    "endTimeout": "End timeout",
+    "advanceHalf": "Advance half",
+    "endGame": "End game",
+    "endGameScoreCap": "End (score cap)"
   }
 }

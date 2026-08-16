@@ -96,17 +96,33 @@ export default function AdminTournamentsTable({
     router.push(`/admin/tournaments/${firstSelectedId}/edit`);
   };
 
-  const onDeleteSelected = () => {
+  const onDeleteSelected = async () => {
     if (selectedIds.size === 0) return;
-    // Placeholder: real implementation will trigger a delete flow. We only
-    // guard against accidental clicks with a confirm prompt so the UX feels
-    // intentional while the API endpoint is still being built.
     const confirmMessage = labels.deleteConfirm.replace(
       "{count}",
       String(selectedIds.size),
     );
     if (typeof window !== "undefined" && window.confirm(confirmMessage)) {
-      window.alert("Delete selected: not yet implemented.");
+      try {
+        // Delete each tournament sequentially through the Next.js proxy route,
+        // which forwards to FastAPI with the session cookies attached.
+        for (const id of selectedIds) {
+          const res = await fetch(`/api/tournaments/${id}`, {
+            method: "DELETE",
+          });
+          if (!res.ok) {
+            const detail = await res.json().catch(() => ({ detail: res.statusText }));
+            throw new Error(
+              detail.detail ?? `Failed to delete tournament ${id} (${res.status})`,
+            );
+          }
+        }
+        // Refresh the page to reflect deletions
+        window.location.reload();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        window.alert(`Delete failed: ${message}`);
+      }
     }
   };
 
