@@ -36,10 +36,25 @@ export function NewTournamentForm({ labels }: { labels: Labels }) {
     setMessage(null);
 
     try {
+      // Convert date strings to ISO 8601 datetime (midnight UTC).
+      // FastAPI expects datetime objects, which JSON serializes as ISO 8601 strings.
+      const payload = {
+        name: formData.name,
+        location: formData.location || null,
+        description: formData.description || null,
+        start_date: formData.start_date ? `${formData.start_date}T00:00:00Z` : null,
+        end_date: formData.end_date ? `${formData.end_date}T00:00:00Z` : null,
+      };
+
+      // Validate that both dates are provided if either is provided.
+      if ((payload.start_date && !payload.end_date) || (!payload.start_date && payload.end_date)) {
+        throw new Error("Both start and end dates are required");
+      }
+
       const res = await fetch("/api/tournaments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
