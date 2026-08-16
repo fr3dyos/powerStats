@@ -59,6 +59,11 @@ export function TournamentEditForm({
   const [phases, setPhases] = useState<Phase[]>(initialPhases);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [showAddPhaseModal, setShowAddPhaseModal] = useState(false);
+  const [newPhaseData, setNewPhaseData] = useState({
+    name: "",
+    phase_type: "round_robin" as "round_robin" | "bracket",
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,6 +92,11 @@ export function TournamentEditForm({
   const handleAddPhase = async () => {
     if (!canEdit) return;
 
+    if (!newPhaseData.name.trim()) {
+      setMessage("Phase name is required");
+      return;
+    }
+
     try {
       const res = await fetch(
         `/api/tournaments/${tournament.id}/phases`,
@@ -94,9 +104,9 @@ export function TournamentEditForm({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: `Phase ${phases.length + 1}`,
+            name: newPhaseData.name,
             phase_order: phases.length + 1,
-            phase_type: "round_robin",
+            phase_type: newPhaseData.phase_type,
             status: "pending",
             status_mode: "auto",
             config: {
@@ -112,6 +122,9 @@ export function TournamentEditForm({
 
       const newPhase = await res.json();
       setPhases([...phases, newPhase]);
+      setShowAddPhaseModal(false);
+      setNewPhaseData({ name: "", phase_type: "round_robin" });
+      setMessage("Phase added successfully!");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to add phase");
     }
@@ -274,12 +287,90 @@ export function TournamentEditForm({
             <button
               type="button"
               className="ps-btn ps-btn--secondary"
-              onClick={handleAddPhase}
+              onClick={() => setShowAddPhaseModal(true)}
             >
               {labels.addPhase}
             </button>
           )}
         </div>
+
+        {showAddPhaseModal && (
+          <div
+            style={{
+              padding: 16,
+              marginBottom: 16,
+              border: "1px solid var(--ps-border)",
+              borderRadius: 8,
+              background: "var(--ps-surface-container-low)",
+            }}
+          >
+            <h3 style={{ fontSize: 14, margin: "0 0 12px 0" }}>{labels.addPhase}</h3>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+                marginBottom: 12,
+              }}
+            >
+              <div>
+                <label style={{ display: "block", marginBottom: 4, fontWeight: 600, fontSize: 12 }}>
+                  {labels.phaseName}
+                </label>
+                <input
+                  type="text"
+                  className="ps-input"
+                  value={newPhaseData.name}
+                  onChange={(e) =>
+                    setNewPhaseData({ ...newPhaseData, name: e.target.value })
+                  }
+                  placeholder="e.g., Groups, Playoffs"
+                  style={{ fontSize: 13 }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: 4, fontWeight: 600, fontSize: 12 }}>
+                  {labels.phaseType}
+                </label>
+                <select
+                  value={newPhaseData.phase_type}
+                  onChange={(e) =>
+                    setNewPhaseData({
+                      ...newPhaseData,
+                      phase_type: e.target.value as "round_robin" | "bracket",
+                    })
+                  }
+                  className="ps-input"
+                  style={{ fontSize: 13 }}
+                >
+                  <option value="round_robin">{labels.phaseRoundRobin}</option>
+                  <option value="bracket">{labels.phaseBracket}</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                className="ps-btn ps-btn--primary"
+                onClick={handleAddPhase}
+                style={{ fontSize: 12 }}
+              >
+                {labels.addPhase}
+              </button>
+              <button
+                type="button"
+                className="ps-btn ps-btn--ghost"
+                onClick={() => {
+                  setShowAddPhaseModal(false);
+                  setNewPhaseData({ name: "", phase_type: "round_robin" });
+                }}
+                style={{ fontSize: 12 }}
+              >
+                {labels.cancel}
+              </button>
+            </div>
+          </div>
+        )}
 
         {phases.length === 0 ? (
           <p style={{ color: "var(--ps-text-muted)" }}>

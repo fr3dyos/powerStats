@@ -313,17 +313,26 @@ export default function PhaseEditor({
               {labels.tiebreakers}
             </label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {TIEBREAKERS.map((tb) => {
+              {TIEBREAKERS.map((tb, idx) => {
                 const checked =
                   draft.config.tiebreakers?.includes(tb.value) ?? false;
+                const tiebreakers = draft.config.tiebreakers ?? [];
+                const tbIndex = tiebreakers.indexOf(tb.value);
+                const isFirst = tbIndex === 0;
+                const isLast = tbIndex === tiebreakers.length - 1;
+
                 return (
-                  <label
+                  <div
                     key={tb.value}
                     style={{
-                      display: "inline-flex",
+                      display: "flex",
                       alignItems: "center",
                       gap: 4,
                       fontSize: 13,
+                      padding: "6px 8px",
+                      background: checked ? "var(--ps-surface-container)" : "transparent",
+                      border: `1px solid ${checked ? "var(--ps-border)" : "transparent"}`,
+                      borderRadius: 4,
                     }}
                   >
                     <input
@@ -343,8 +352,70 @@ export default function PhaseEditor({
                       }}
                       disabled={saving}
                     />
-                    {tb.label}
-                  </label>
+                    <span>{tb.label}</span>
+                    {checked && (
+                      <div style={{ display: "flex", gap: 2, marginLeft: 4 }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!isFirst) {
+                              const arr = [...tiebreakers];
+                              [arr[tbIndex - 1], arr[tbIndex]] = [
+                                arr[tbIndex],
+                                arr[tbIndex - 1],
+                              ];
+                              setDraft({
+                                ...draft,
+                                config: { ...draft.config, tiebreakers: arr },
+                              });
+                            }
+                          }}
+                          disabled={isFirst || saving}
+                          title="Move up in hierarchy"
+                          style={{
+                            padding: "2px 4px",
+                            fontSize: 10,
+                            background: "var(--ps-surface-container-high)",
+                            border: "1px solid var(--ps-border)",
+                            borderRadius: 2,
+                            cursor: isFirst ? "not-allowed" : "pointer",
+                            opacity: isFirst ? 0.4 : 1,
+                          }}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!isLast) {
+                              const arr = [...tiebreakers];
+                              [arr[tbIndex], arr[tbIndex + 1]] = [
+                                arr[tbIndex + 1],
+                                arr[tbIndex],
+                              ];
+                              setDraft({
+                                ...draft,
+                                config: { ...draft.config, tiebreakers: arr },
+                              });
+                            }
+                          }}
+                          disabled={isLast || saving}
+                          title="Move down in hierarchy"
+                          style={{
+                            padding: "2px 4px",
+                            fontSize: 10,
+                            background: "var(--ps-surface-container-high)",
+                            border: "1px solid var(--ps-border)",
+                            borderRadius: 2,
+                            cursor: isLast ? "not-allowed" : "pointer",
+                            opacity: isLast ? 0.4 : 1,
+                          }}
+                        >
+                          ↓
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
