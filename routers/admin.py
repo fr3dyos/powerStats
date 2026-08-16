@@ -1002,3 +1002,147 @@ def admin_set_game_spirit(
         spirit_home=game.spirit_home,
         spirit_away=game.spirit_away,
     )
+
+
+# ---------------------------------------------------------------------------
+# Bulk import: players + auto-create teams
+# ---------------------------------------------------------------------------
+class BulkPlayerImportRow(BaseModel):
+    """One player row from CSV import."""
+    player_name: str = Field(..., alias="player name")
+    player_lastname: str = Field(..., alias="player lastname")
+    player_number: str = Field(..., alias="player number")
+    team: str
+    gender: Optional[str] = None
+    other: Optional[str] = None
+
+    class Config:
+        populate_by_name = True
+
+
+class BulkImportPayload(BaseModel):
+    """Bulk player import request."""
+    players: List[dict]
+
+
+class BulkImportReport(BaseModel):
+    """Result of bulk player + team import."""
+    teams_created: int = 0
+    players_created: int = 0
+    teams: List[schemas.Team] = []
+    players: List[schemas.Player] = []
+    errors: List[dict] = []
+
+
+@router.post(
+    "/tournaments/{tournament_id}/bulk-import",
+    response_model=BulkImportReport,
+)
+def bulk_import_teams_and_players(
+    tournament_id: int,
+    payload: BulkImportPayload,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Bulk import players from CSV/XLSX. Auto-creates teams if needed.
+
+    Expects rows with columns:
+    - player name (first name)
+    - player lastname (last name)
+    - player number
+    - team (team name; created if doesn't exist)
+    - gender (optional)
+    - other (optional)
+
+    Returns counts + lists of created teams/players + any errors.
+    """
+    tournament = db.query(models.Tournament).filter_by(id=tournament_id).first()
+    if not tournament:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tournament {tournament_id} not found",
+        )
+
+    created_teams = []
+    created_players = []
+    errors = []
+    team_cache: Dict[str, models.Team] = {}
+
+    for idx, row in enumerate(payload.players):
+        try:
+            # Validate row structure
+            if not isinstance(row, dict):
+                errors.append({"row": idx + 1, "reason": "Row is not a dict"})
+                continue
+
+            # Normalize keys (case-insensitive, trim spaces)
+            row_lower = {k.strip().lower(): v for k, v in row.items()}
+
+            player_name = row_lower.get("player name", "").strip()
+            player_lastname = row_lower.get("player lastname", "").strip()
+            player_number = row_lower.get("player number", "").strip()
+            team_name = row_lower.get("team", "").strip()
+            gender = row_lower.get("gender", "").strip() or None
+            other = row_lower.get("other", "").strip() or None
+
+            if not player_name or not player_lastname or not team_name:
+                errors.append({
+                    "row": idx + 1,
+                    "reason": "Missing required fields (name, lastname, team)",
+                })
+                continue
+
+            # Ensure team exists
+            if team_name not in team_cache:
+                team = db.query(models.Team).filter_by(
+                    name=team_name, tournament_id=tournament_id
+                ).first()
+                if not team:
+                    team = models.Team(
+                        name=team_name,
+                        tournament_id=tournament_id,
+                    )
+                    db.add(team)
+                    db.flush()
+                    created_teams.append(team)
+                team_cache[team_name] = team
+            else:
+                team = team_cache[team_name]
+
+            # Create player
+            player = models.Player(
+                first_name=player_name,
+                last_name=player_lastname,
+                jersey_number=int(player_number) if player_number.isdigit() else None,
+                team_id=team.id,
+                gender=gender,
+            )
+            db.add(player)
+            db.flush()
+            created_players.append(player)
+
+        except Exception as exc:
+            errors.append({
+                "row": idx + 1,
+                "reason": str(exc),
+            })
+
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not commit bulk import: {str(exc)}",
+        ) from exc
+
+    # Fetch all teams for the tournament to return updated list
+    all_teams = db.query(models.Team).filter_by(tournament_id=tournament_id).all()
+
+    return BulkImportReport(
+        teams_created=len(created_teams),
+        players_created=len(created_players),
+        teams=[schemas.Team.from_orm(t) for t in all_teams],
+        players=[schemas.Player.from_orm(p) for p in created_players],
+        errors=errors,
+    )

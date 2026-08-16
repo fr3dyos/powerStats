@@ -9,9 +9,11 @@ import { getServerLocale } from "@/utils/i18n-server";
 import {
   tournamentsApi,
   phasesApi,
+  teamsApi,
   formatDate,
   type Tournament,
   type Phase,
+  type Team,
 } from "@/utils/api";
 import { TournamentEditForm } from "./_components/TournamentEditForm";
 
@@ -47,6 +49,7 @@ export default async function EditTournamentPage({
   // forwarded; the previous hard-coded http://localhost:8000 was broken in
   // any non-local environment).
   const phases = await phasesApi.listByTournament(id).catch(() => [] as Phase[]);
+  const teams = await teamsApi.listByTournament(id).catch(() => [] as Team[]);
 
   const { dict } = await getServerLocale();
   const auth = dict.auth;
@@ -83,6 +86,7 @@ export default async function EditTournamentPage({
         <TournamentEditForm
           tournament={tournament}
           phases={phases}
+          teams={teams}
           labels={{
             name: at.name,
             location: at.location,
@@ -113,6 +117,16 @@ export default async function EditTournamentPage({
             groupCount: at.groupCount,
             advancingTeams: at.advancingTeams,
             tiebreakers: at.tiebreakers,
+            teams: at.teams,
+            addTeam: "Add team",
+            teamName: at.name,
+            players: at.players,
+            importRoster: at.importRoster,
+            uploadCSVXLSX: "Upload CSV/XLSX",
+            dragDropHint: "or drag and drop",
+            selectFile: "Select file",
+            submit: at.create,
+            loading: at.saving,
           }}
           canEdit={role === "admin"}
         />

@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { Tournament, Phase } from "@/utils/api-shared";
+import type { Tournament, Phase, Team } from "@/utils/api-shared";
 
 import PhaseEditor from "./PhaseEditor";
+import TeamsAndPlayersPanel from "./TeamsAndPlayersPanel";
 
 type Props = {
   tournament: Tournament;
   phases: Phase[];
+  teams: Team[];
   labels: {
     name: string;
     location: string;
@@ -39,6 +41,16 @@ type Props = {
     groupCount: string;
     advancingTeams: string;
     tiebreakers: string;
+    teams: string;
+    addTeam: string;
+    teamName: string;
+    players: string;
+    importRoster: string;
+    uploadCSVXLSX: string;
+    dragDropHint: string;
+    selectFile: string;
+    submit: string;
+    loading: string;
   };
   canEdit: boolean;
 };
@@ -46,6 +58,7 @@ type Props = {
 export function TournamentEditForm({
   tournament,
   phases: initialPhases,
+  teams: initialTeams,
   labels,
   canEdit,
 }: Props) {
@@ -57,6 +70,7 @@ export function TournamentEditForm({
     end_date: tournament.end_date?.split("T")[0] || "",
   });
   const [phases, setPhases] = useState<Phase[]>(initialPhases);
+  const [teams, setTeams] = useState<Team[]>(initialTeams);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [showAddPhaseModal, setShowAddPhaseModal] = useState(false);
@@ -273,7 +287,26 @@ export function TournamentEditForm({
         )}
       </form>
 
-      <div className="ps-card">
+      <TeamsAndPlayersPanel
+        tournamentId={tournament.id}
+        teams={teams}
+        onTeamsUpdated={setTeams}
+        labels={{
+          teams: labels.teams,
+          addTeam: labels.addTeam,
+          teamName: labels.teamName,
+          players: labels.players,
+          importRoster: labels.importRoster,
+          uploadCSVXLSX: labels.uploadCSVXLSX,
+          dragDropHint: labels.dragDropHint,
+          selectFile: labels.selectFile,
+          submit: labels.submit,
+          cancel: labels.cancel,
+          loading: labels.loading,
+        }}
+      />
+
+      {/* Phases Section */}
         <div
           style={{
             display: "flex",
