@@ -96,7 +96,7 @@ powerstats/
 ├── supabase/migrations/ # SQL migrations (apply via `supabase db push`)
 ├── scripts/             # Seed scripts (e.g. seed_hatrio40.py) + SQL utilities
 ├── utils/               # API client, Supabase clients, i18n + async helpers
-├── PAGE_MAP.md          # Page-by-page audit (tables, endpoints, pages, gaps)
+├── PAGE_MAP_FULL.md     # Page-by-page audit (tables, endpoints, pages, gaps) — source of truth
 └── next.config.js       # Next.js configuration
 ```
 
@@ -284,9 +284,10 @@ Translation files are in `messages/` directory. Add new languages by creating a 
 
 ## Page Map
 
-See [PAGE_MAP.md](PAGE_MAP.md) for a comprehensive page-by-page audit: every
+See [PAGE_MAP_FULL.md](PAGE_MAP_FULL.md) for a comprehensive page-by-page audit: every
 database table, API endpoint, and frontend page with its current status,
-buttons, functions, and known gaps.
+buttons, functions, and known gaps. This is the canonical source of truth;
+the older `PAGE_MAP.md` is now stale.
 
 ## Contributing
 
