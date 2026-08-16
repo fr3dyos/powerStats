@@ -18,6 +18,9 @@ export async function createTeamAction(
   const name = String(formData.get("name") ?? "").trim();
   const tournamentRaw = String(formData.get("tournament_id") ?? "").trim();
   const logoUrl = String(formData.get("logo_url") ?? "").trim();
+  // Optional uploaded file; if present we POST it to FastAPI after create
+  // so the team's ``logo_url`` ends up pointing at the storage bucket.
+  const logoFile = formData.get("logo_file");
 
   if (!name || !tournamentRaw) {
     return { ok: false, error: "requiredFields" };
@@ -34,6 +37,16 @@ export async function createTeamAction(
       tournament_id: tournamentId,
       ...(logoUrl ? { logo_url: logoUrl } : {}),
     });
+    if (logoFile instanceof File && logoFile.size > 0) {
+      try {
+        await teamsApi.uploadLogo(team.id, logoFile);
+      } catch (uploadErr) {
+        // The team was created but the logo upload failed. Surface a soft
+        // failure so the user knows the team exists but the logo didn't
+        // stick — they can re-upload from the edit page.
+        console.error("team logo upload failed", uploadErr);
+      }
+    }
     revalidatePath("/admin/teams");
     revalidatePath(`/tournaments/${tournamentId}`);
     revalidatePath("/");
@@ -58,6 +71,7 @@ export async function updateTeamAction(
   const name = String(formData.get("name") ?? "").trim();
   const tournamentRaw = String(formData.get("tournament_id") ?? "").trim();
   const logoUrl = String(formData.get("logo_url") ?? "").trim();
+  const logoFile = formData.get("logo_file");
 
   if (!name || !tournamentRaw) {
     return { ok: false, error: "requiredFields" };
@@ -74,6 +88,13 @@ export async function updateTeamAction(
       tournament_id: tournamentId,
       ...(logoUrl ? { logo_url: logoUrl } : {}),
     });
+    if (logoFile instanceof File && logoFile.size > 0) {
+      try {
+        await teamsApi.uploadLogo(team.id, logoFile);
+      } catch (uploadErr) {
+        console.error("team logo upload failed", uploadErr);
+      }
+    }
     revalidatePath("/admin/teams");
     revalidatePath(`/tournaments/${tournamentId}`);
     revalidatePath(`/teams/${teamId}`);

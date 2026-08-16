@@ -49,13 +49,13 @@ export default async function NewTournamentPage() {
         <NewTournamentForm
           labels={{
             name: at.name,
-            location: "Location",
-            description: "Description",
-            startDate: "Start date",
-            endDate: "End date",
+            location: at.location,
+            description: at.description,
+            startDate: at.startDate,
+            endDate: at.endDate,
             create: at.create,
             cancel: at.cancel,
-            saving: "Saving...",
+            saving: at.saving,
           }}
         />
 

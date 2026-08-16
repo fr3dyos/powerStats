@@ -44,6 +44,7 @@ export default async function AdminDashboardPage() {
 const { dict } = await getServerLocale();
   const dashboard = dict.adminDashboard;
   const auth = dict.auth;
+  const nav = dict.navigation;
 
   // Fetch a small set of recent / live games so the live-scoring tile can
   // deep-link to a real game console instead of leaving the admin to
@@ -157,11 +158,18 @@ const { dict } = await getServerLocale();
       footer: dashboard.liveScoringFooter,
     },
     {
-      href: "/admin/tournaments",
+      href: "/admin/schedules",
       icon: "05",
       title: dashboard.schedules,
       copy: dashboard.schedulesCopy,
       footer: dashboard.schedulesFooter,
+    },
+    {
+      href: "/admin/users",
+      icon: "06",
+      title: dashboard.users,
+      copy: dashboard.usersCopy,
+      footer: dashboard.usersFooter,
     },
   ];
 
@@ -169,9 +177,9 @@ const { dict } = await getServerLocale();
     <AppShell
       brandSubtitle={auth.adminBrand}
       authLinks={[
-        { label: "Tournaments", href: "/tournaments", variant: "ghost" },
-        { label: "Teams", href: "/admin/teams", variant: "ghost" },
-        { label: "Players", href: "/admin/players", variant: "ghost" },
+        { label: nav.tournaments, href: "/tournaments", variant: "ghost" },
+        { label: nav.teams, href: "/admin/teams", variant: "ghost" },
+        { label: nav.players, href: "/admin/players", variant: "ghost" },
       ]}
     >
       <section className="ps-admin">

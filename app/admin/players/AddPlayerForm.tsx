@@ -15,6 +15,8 @@ type AddPlayerFormProps = {
     jersey: string;
     team: string;
     selectTeam: string;
+    photoFile: string;
+    photoFileHint: string;
     save: string;
     cancel: string;
     requiredFields: string;
@@ -30,6 +32,7 @@ export default function AddPlayerForm({ teams, tournamentNames, copy }: AddPlaye
   const [lastName, setLastName] = useState("");
   const [jersey, setJersey] = useState("");
   const [teamId, setTeamId] = useState<string>("");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -54,6 +57,7 @@ export default function AddPlayerForm({ teams, tournamentNames, copy }: AddPlaye
     setLastName("");
     setJersey("");
     setTeamId("");
+    setPhotoFile(null);
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -70,6 +74,7 @@ export default function AddPlayerForm({ teams, tournamentNames, copy }: AddPlaye
     formData.set("last_name", lastName.trim());
     formData.set("jersey_number", jersey.trim());
     formData.set("team_id", teamId);
+    if (photoFile) formData.set("photo_file", photoFile);
 
     startTransition(async () => {
       const result = await createPlayerAction(formData);
@@ -173,6 +178,21 @@ export default function AddPlayerForm({ teams, tournamentNames, copy }: AddPlaye
               </optgroup>
             ))}
           </select>
+        </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontSize: 12, fontWeight: 600 }}>{copy.photoFile}</span>
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              setPhotoFile(file);
+            }}
+            className="ps-input"
+          />
+          <span style={{ fontSize: 11, color: "var(--ps-text-muted)" }}>
+            {copy.photoFileHint}
+          </span>
         </label>
       </div>
 

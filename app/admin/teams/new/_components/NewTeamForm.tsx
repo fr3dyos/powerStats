@@ -14,6 +14,8 @@ type NewTeamFormProps = {
     selectTournament: string;
     logoUrl: string;
     logoUrlHint: string;
+    logoFile: string;
+    logoFileHint: string;
     save: string;
     cancel: string;
     requiredFields: string;
@@ -30,6 +32,7 @@ export default function NewTeamForm({
   const [name, setName] = useState("");
   const [tournamentId, setTournamentId] = useState<string>("");
   const [logoUrl, setLogoUrl] = useState("");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -37,6 +40,7 @@ export default function NewTeamForm({
     setName("");
     setTournamentId("");
     setLogoUrl("");
+    setLogoFile(null);
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -52,6 +56,7 @@ export default function NewTeamForm({
     formData.set("name", name.trim());
     formData.set("tournament_id", tournamentId);
     if (logoUrl.trim()) formData.set("logo_url", logoUrl.trim());
+    if (logoFile) formData.set("logo_file", logoFile);
 
     startTransition(async () => {
       const result = await createTeamAction(formData);
@@ -114,14 +119,34 @@ export default function NewTeamForm({
           </select>
         </label>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontSize: 12, fontWeight: 600 }}>{copy.logoFile}</span>
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              setLogoFile(file);
+              if (file) setLogoUrl("");
+            }}
+            className="ps-input"
+          />
+          <span style={{ fontSize: 11, color: "var(--ps-text-muted)" }}>
+            {copy.logoFileHint}
+          </span>
+        </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 12, fontWeight: 600 }}>{copy.logoUrl}</span>
           <input
             type="url"
             value={logoUrl}
-            onChange={(e) => setLogoUrl(e.target.value)}
+            onChange={(e) => {
+              setLogoUrl(e.target.value);
+              if (e.target.value) setLogoFile(null);
+            }}
             className="ps-input"
             placeholder={copy.logoUrlHint}
             autoComplete="off"
+            disabled={logoFile !== null}
           />
         </label>
       </div>

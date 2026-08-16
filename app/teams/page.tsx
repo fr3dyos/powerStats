@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { teamColor, type Team } from "@/utils/api-shared";
 import { mapWithConcurrency } from "@/utils/async";
 import { AppShell } from "@/app/_components/AppShell";
+import { createClient } from "@/utils/supabase/client";
 
 // --- Lightweight client fetch helper ---------------------------------
 // Talks to the Next.js `/api/*` proxy routes. Each returns parsed JSON
@@ -52,6 +53,9 @@ export default function TeamsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  // Admin-only UI (New team / Edit / Delete) is gated behind this flag,
+  // mirroring the auth check used by /games. Public viewers see read-only.
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Inline create form state
   const [showNew, setShowNew] = useState(false);
@@ -62,6 +66,21 @@ export default function TeamsPage() {
     setLoading(true);
     setError(null);
     try {
+      // Auth check: admin-only actions (New team / Edit / Delete) must
+      // stay hidden for public viewers. Scorekeepers can also create
+      // teams in practice, but the public page only exposes admin gating
+      // to match the existing /games pattern.
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.auth.getSession();
+        const role =
+          (data.session?.user?.app_metadata as { role?: string } | undefined)
+            ?.role ?? "public";
+        setIsAdmin(role === "admin");
+      } catch {
+        setIsAdmin(false);
+      }
+
       const tourList = await api<Array<{ id: number; name: string }>>(
         "/api/tournaments",
       );
@@ -187,16 +206,18 @@ export default function TeamsPage() {
         }}
       >
         <h1 style={{ margin: 0 }}>Teams</h1>
-        <button
-          type="button"
-          className="ps-btn ps-btn--primary"
-          onClick={() => setShowNew((v) => !v)}
-        >
-          {showNew ? "Cancel" : "New team"}
-        </button>
+        {isAdmin ? (
+          <button
+            type="button"
+            className="ps-btn ps-btn--primary"
+            onClick={() => setShowNew((v) => !v)}
+          >
+            {showNew ? "Cancel" : "New team"}
+          </button>
+        ) : null}
       </header>
 
-      {showNew ? (
+      {showNew && isAdmin ? (
         <form
           onSubmit={createTeam}
           className="ps-card"
@@ -255,7 +276,9 @@ export default function TeamsPage() {
                 <th style={{ textAlign: "right" }}>W</th>
                 <th style={{ textAlign: "right" }}>L</th>
                 <th style={{ textAlign: "right" }}>Power score</th>
-                <th style={{ textAlign: "right" }}>Actions</th>
+                {isAdmin ? (
+                  <th style={{ textAlign: "right" }}>Actions</th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
@@ -302,24 +325,26 @@ export default function TeamsPage() {
                     >
                       {t.power_score.toFixed(1)}
                     </td>
-                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                      <Link
-                        href={`/admin/teams/${t.id}/edit`}
-                        className="ps-btn ps-btn--ghost"
-                        style={{ fontSize: 12, padding: "4px 10px", marginRight: 6 }}
-                      >
-                        Edit
-                      </Link>
-                      <button
-                        type="button"
-                        className="ps-btn ps-btn--ghost"
-                        onClick={() => deleteTeam(t.id)}
-                        disabled={isBusy}
-                        style={{ fontSize: 12, padding: "4px 10px" }}
-                      >
-                        {isBusy ? "…" : "Delete"}
-                      </button>
-                    </td>
+                    {isAdmin ? (
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <Link
+                          href={`/admin/teams/${t.id}/edit`}
+                          className="ps-btn ps-btn--ghost"
+                          style={{ fontSize: 12, padding: "4px 10px", marginRight: 6 }}
+                        >
+                          Edit
+                        </Link>
+                        <button
+                          type="button"
+                          className="ps-btn ps-btn--ghost"
+                          onClick={() => deleteTeam(t.id)}
+                          disabled={isBusy}
+                          style={{ fontSize: 12, padding: "4px 10px" }}
+                        >
+                          {isBusy ? "…" : "Delete"}
+                        </button>
+                      </td>
+                    ) : null}
                   </tr>
                 );
               })}

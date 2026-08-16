@@ -86,6 +86,8 @@ export default async function NewTeamPage() {
               selectTournament: at.selectTournament,
               logoUrl: at.logoUrl,
               logoUrlHint: "https://…",
+              logoFile: at.logoFile,
+              logoFileHint: at.logoFileHint,
               save: at.save,
               cancel: at.cancel,
               requiredFields: at.requiredFields,

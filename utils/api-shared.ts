@@ -60,6 +60,8 @@ export type Game = {
   is_live: boolean;
   is_placement: boolean;
   placement_position: number | null;
+  spirit_home: number | null;
+  spirit_away: number | null;
   clock_running: boolean;
   clock_started_at: string | null;
   clock_elapsed: number;

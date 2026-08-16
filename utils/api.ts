@@ -176,7 +176,14 @@ export async function apiFetch<T>(
     Accept: "application/json",
     ...options.headers,
   };
-  if (options.body !== undefined) {
+  // FormData payloads must set their own multipart boundary — never override
+  // Content-Type, just pass the body through. JSON bodies get the canonical
+  // Content-Type header.
+  const isFormData =
+    typeof options.body !== "undefined" &&
+    typeof FormData !== "undefined" &&
+    options.body instanceof FormData;
+  if (options.body !== undefined && !isFormData) {
     headers["Content-Type"] = "application/json";
   }
   if (!options.anonymous) {
@@ -187,7 +194,12 @@ export async function apiFetch<T>(
   const res = await fetch(url.toString(), {
     method: options.method ?? "GET",
     headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    body:
+      options.body === undefined
+        ? undefined
+        : isFormData
+          ? (options.body as FormData)
+          : JSON.stringify(options.body),
     signal: options.signal,
     // Next.js caches GETs by default in Server Components; opt out per request.
     cache: "no-store",
@@ -236,6 +248,17 @@ export const tournamentsApi = {
       end_date?: string;
     },
   ) => apiFetch<Tournament>(`/tournaments/${id}`, { method: "PUT", body: input }),
+  spiritRanking: (id: number) =>
+    apiFetch<{
+      tournament_id: number;
+      teams: Array<{
+        team_id: number;
+        team_name: string;
+        spirit_average: number;
+        spirit_games: number;
+        position: number;
+      }>;
+    }>(`/tournaments/${id}/spirit-ranking`),
 };
 
 export const teamsApi = {
@@ -253,6 +276,11 @@ export const teamsApi = {
   ) => apiFetch<Team>(`/teams/${id}`, { method: "PUT", body: input }),
   remove: (id: number) =>
     apiFetch<void>(`/teams/${id}`, { method: "DELETE" }),
+  uploadLogo: (id: number, file: File) => {
+    const form = new FormData();
+    form.set("file", file);
+    return apiFetch<Team>(`/teams/${id}/logo`, { method: "POST", body: form });
+  },
 };
 
 export const playersApi = {
@@ -285,6 +313,14 @@ export const playersApi = {
     }),
   remove: (id: number) =>
     apiFetch<void>(`/players/${id}`, { method: "DELETE" }),
+  uploadPhoto: (id: number, file: File) => {
+    const form = new FormData();
+    form.set("file", file);
+    return apiFetch<{ player: { id: number; photo_url: string | null } }>(
+      `/players/${id}/photo`,
+      { method: "POST", body: form },
+    );
+  },
   stats: (id: number) =>
     apiFetch<{
       player: { id: number; first_name: string; last_name: string; jersey_number: number | null; team_id: number };
@@ -344,6 +380,50 @@ export const gamesApi = {
 export const phasesApi = {
   listByTournament: (tournamentId: number) =>
     apiFetch<Phase[]>(`/tournaments/${tournamentId}/phases`),
+  get: (phaseId: number) => apiFetch<Phase>(`/phases/${phaseId}`),
+  create: (
+    tournamentId: number,
+    input: {
+      name: string;
+      phase_order: number;
+      phase_type: "ROUND_ROBIN" | "BRACKET";
+      status?: "pending" | "in_progress" | "completed";
+      status_mode?: "auto" | "manual";
+      config?: Record<string, unknown>;
+    },
+  ) =>
+    apiFetch<Phase>(`/tournaments/${tournamentId}/phases`, {
+      method: "POST",
+      body: input,
+    }),
+  update: (
+    phaseId: number,
+    input: {
+      name?: string;
+      phase_order?: number;
+      status?: "pending" | "in_progress" | "completed";
+      status_mode?: "auto" | "manual";
+      config?: Record<string, unknown>;
+    },
+  ) =>
+    apiFetch<Phase>(`/phases/${phaseId}`, {
+      method: "PUT",
+      body: input,
+    }),
+  remove: (phaseId: number) =>
+    apiFetch<void>(`/phases/${phaseId}`, { method: "DELETE" }),
+  advance: (phaseId: number, targetPhaseId: number, teamsPerGroup?: number) =>
+    apiFetch<{
+      source_phase_id: number;
+      target_phase_id: number;
+      advanced_team_ids: number[];
+    }>(`/phases/${phaseId}/advance`, {
+      method: "POST",
+      query: {
+        target_phase_id: targetPhaseId,
+        teams_per_group: teamsPerGroup,
+      },
+    }),
   standings: (phaseId: number) =>
     apiFetch<{
       phase_id: number;
@@ -370,4 +450,21 @@ export const phasesApi = {
       tiebreakers: string[];
       generated_at: string;
     }>(`/phases/${phaseId}/standings`),
+};
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  role: "admin" | "scorekeeper" | "public";
+  created_at: string;
+  last_sign_in_at: string | null;
+};
+
+export const usersApi = {
+  list: () => apiFetch<AuthUser[]>("/auth/users"),
+  updateRole: (userId: string, role: AuthUser["role"]) =>
+    apiFetch<AuthUser>(`/auth/users/${userId}/role`, {
+      method: "PUT",
+      body: { role },
+    }),
 };

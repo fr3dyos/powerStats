@@ -27,6 +27,7 @@ type Labels = {
   newGame: string;
   noTeams: string;
   noTeamsHint: string;
+  pickTournamentFirst: string;
 };
 
 type GamesAdminTableProps = {
@@ -51,6 +52,13 @@ function formatTime(value: string | null | undefined): string {
 
 export default function GamesAdminTable({ rows, labels }: GamesAdminTableProps) {
   const [tournamentFilter, setTournamentFilter] = useState<number | "all">("all");
+  // When the table-level filter is "all", the "+ New game" CTA needs a
+  // specific tournament to deep-link into. The user picks one inline; the
+  // CTA stays disabled until they do so we never bounce them to a generic
+  // page without context.
+  const [inlineTournament, setInlineTournament] = useState<number | "">(
+    rows[0]?.tournament.id ?? "",
+  );
 
   const tournamentOptions = useMemo(() => {
     return rows.map((r) => ({ id: r.tournament.id, name: r.tournament.name }));
@@ -238,14 +246,64 @@ export default function GamesAdminTable({ rows, labels }: GamesAdminTableProps) 
         </div>
       )}
 
-      <div style={{ marginTop: 16 }}>
+      <div
+        style={{
+          marginTop: 16,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        {tournamentFilter === "all" ? (
+          <>
+            <label
+              htmlFor="ps-games-inline-tournament"
+              style={{ fontSize: 13, color: "var(--ps-text-muted)" }}
+            >
+              {labels.tournament}
+            </label>
+            <select
+              id="ps-games-inline-tournament"
+              className="ps-input"
+              value={inlineTournament === "" ? "" : String(inlineTournament)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setInlineTournament(value === "" ? "" : Number(value));
+              }}
+              style={{ maxWidth: 280 }}
+            >
+              <option value="" disabled>
+                {labels.pickTournamentFirst}
+              </option>
+              {tournamentOptions.map((t) => (
+                <option key={t.id} value={String(t.id)}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </>
+        ) : null}
         <Link
+          aria-disabled={
+            tournamentFilter === "all" && inlineTournament === ""
+          }
           href={
             tournamentFilter !== "all"
               ? `/admin/tournaments/${tournamentFilter}/games/new`
-              : "/admin/tournaments"
+              : inlineTournament !== ""
+                ? `/admin/tournaments/${inlineTournament}/games/new`
+                : "#"
           }
           className="ps-btn ps-btn--primary"
+          style={{
+            pointerEvents:
+              tournamentFilter === "all" && inlineTournament === ""
+                ? "none"
+                : "auto",
+            opacity:
+              tournamentFilter === "all" && inlineTournament === "" ? 0.5 : 1,
+          }}
         >
           + {labels.newGame}
         </Link>

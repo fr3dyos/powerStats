@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import type { Tournament, Phase } from "@/utils/api-shared";
 
+import PhaseEditor from "./PhaseEditor";
+
 type Props = {
   tournament: Tournament;
   phases: Phase[];
@@ -28,6 +30,15 @@ type Props = {
     generateRoundRobin: string;
     generateBracket: string;
     viewStandings: string;
+    edit: string;
+    delete: string;
+    deleteConfirm: string;
+    suggestSchedule: string;
+    suggestScheduleFailed: string;
+    suggestScheduleSuccess: string;
+    groupCount: string;
+    advancingTeams: string;
+    tiebreakers: string;
   };
   canEdit: boolean;
 };
@@ -88,7 +99,11 @@ export function TournamentEditForm({
             phase_type: "round_robin",
             status: "pending",
             status_mode: "auto",
-            config: {},
+            config: {
+              group_count: 2,
+              advancing_teams: 2,
+              tiebreakers: ["head_to_head", "point_diff"],
+            },
           }),
         }
       );
@@ -102,7 +117,18 @@ export function TournamentEditForm({
     }
   };
 
-  const handleGenerateFixtures = async (phaseId: number, type: "round-robin" | "bracket") => {
+  const handlePhaseChange = (next: Phase) => {
+    setPhases((curr) => curr.map((p) => (p.id === next.id ? next : p)));
+  };
+
+  const handlePhaseDelete = (phaseId: number) => {
+    setPhases((curr) => curr.filter((p) => p.id !== phaseId));
+  };
+
+  const handleGenerateFixtures = async (
+    phaseId: number,
+    type: "round-robin" | "bracket",
+  ) => {
     if (!canEdit) return;
 
     const endpoint =
@@ -122,7 +148,7 @@ export function TournamentEditForm({
       setMessage(`${type} generated successfully!`);
     } catch (err) {
       setMessage(
-        err instanceof Error ? err.message : `Failed to generate ${type}`
+        err instanceof Error ? err.message : `Failed to generate ${type}`,
       );
     }
   };
@@ -262,68 +288,38 @@ export function TournamentEditForm({
         ) : (
           <div style={{ display: "grid", gap: 12 }}>
             {phases.map((phase) => (
-              <div
+              <PhaseEditor
                 key={phase.id}
-                style={{
-                  padding: 16,
-                  border: "1px solid var(--ps-border)",
-                  borderRadius: 8,
-                  background: "var(--ps-surface-container-low)",
+                phase={phase}
+                tournamentId={tournament.id}
+                canEdit={canEdit}
+                onChange={handlePhaseChange}
+                onDelete={handlePhaseDelete}
+                labels={{
+                  name: labels.phaseName,
+                  phaseType: labels.phaseType,
+                  phaseStatus: labels.phaseStatus,
+                  phaseRoundRobin: labels.phaseRoundRobin,
+                  phaseBracket: labels.phaseBracket,
+                  phasePending: labels.phasePending,
+                  phaseInProgress: labels.phaseInProgress,
+                  phaseCompleted: labels.phaseCompleted,
+                  generateRoundRobin: labels.generateRoundRobin,
+                  generateBracket: labels.generateBracket,
+                  viewStandings: labels.viewStandings,
+                  edit: labels.edit,
+                  save: labels.save,
+                  cancel: labels.cancel,
+                  delete: labels.delete,
+                  deleteConfirm: labels.deleteConfirm,
+                  suggestSchedule: labels.suggestSchedule,
+                  suggestScheduleFailed: labels.suggestScheduleFailed,
+                  suggestScheduleSuccess: labels.suggestScheduleSuccess,
+                  groupCount: labels.groupCount,
+                  advancingTeams: labels.advancingTeams,
+                  tiebreakers: labels.tiebreakers,
                 }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 8,
-                  }}
-                >
-                  <h3 style={{ margin: 0, fontSize: 16 }}>{phase.name}</h3>
-                  <span className="ps-pill">
-                    {phase.phase_type === "round_robin"
-                      ? labels.phaseRoundRobin
-                      : labels.phaseBracket}
-                  </span>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    flexWrap: "wrap",
-                    marginTop: 12,
-                  }}
-                >
-                  {phase.phase_type === "round_robin" && canEdit && (
-                    <button
-                      type="button"
-                      className="ps-btn ps-btn--ghost"
-                      onClick={() => handleGenerateFixtures(phase.id, "round-robin")}
-                      style={{ fontSize: 12 }}
-                    >
-                      {labels.generateRoundRobin}
-                    </button>
-                  )}
-                  {phase.phase_type === "bracket" && canEdit && (
-                    <button
-                      type="button"
-                      className="ps-btn ps-btn--ghost"
-                      onClick={() => handleGenerateFixtures(phase.id, "bracket")}
-                      style={{ fontSize: 12 }}
-                    >
-                      {labels.generateBracket}
-                    </button>
-                  )}
-                  <Link
-                    href={`/tournaments/${tournament.id}/phases/${phase.id}/standings`}
-                    className="ps-btn ps-btn--ghost"
-                    style={{ fontSize: 12 }}
-                  >
-                    {labels.viewStandings}
-                  </Link>
-                </div>
-              </div>
+              />
             ))}
           </div>
         )}

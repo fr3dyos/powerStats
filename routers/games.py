@@ -702,6 +702,100 @@ def end_game(
 
 
 # ---------------------------------------------------------------------------
+# Undo last event
+# ---------------------------------------------------------------------------
+@router.post("/{game_id}/events/undo", response_model=schemas.Game)
+def undo_last_event(
+    game_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_scorekeeper),
+):
+    """Undo the most recent event recorded against a game.
+
+    Rolls back the effect of the last ``game_events`` row on the game score
+    and on ``player_tournament_stats``. Used by the live scoring console
+    when a scorekeeper mis-taps a button. Idempotent in the sense that it
+    refuses to operate on a completed game; otherwise a second call after
+    a successful first will simply delete the new last event.
+
+    Behavior matrix:
+      - ``GOAL``:    decrement player goals, game.home_score / away_score.
+      - ``ASSIST``:  decrement player assists.
+      - ``DEFENSE``: decrement player defenses.
+      - ``TIMEOUT``: just delete (no stat counter).
+      - ``SUBSTITUTION`` with ``points == 99`` (timeout-end marker):
+                     just delete.
+      - ``HALF``:    reject (cannot rewind a half without losing all
+                     subsequent stats; human should correct via /end).
+
+    :param game_id: Game primary key.
+    :param db: SQLAlchemy session.
+    :return: The updated game after rollback.
+    """
+    game = _get_game_or_404(db, game_id)
+    _ensure_not_completed(game)
+
+    last_event = (
+        db.query(models.GameEvent)
+        .filter(models.GameEvent.game_id == game.id)
+        .order_by(models.GameEvent.id.desc())
+        .first()
+    )
+    if last_event is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No events to undo for this game.",
+        )
+
+    if last_event.event_type == models.GameEventTypeEnum.HALF:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Cannot undo a HALF event. If you advanced prematurely, "
+                "delete the subsequent events manually or contact an admin."
+            ),
+        )
+
+    try:
+        if last_event.event_type == models.GameEventTypeEnum.GOAL:
+            stats = _get_or_create_player_stats(
+                db, last_event.player_id, game.tournament_id
+            )
+            stats.goals = max(stats.goals - 1, 0)
+            # Subtract the points the goal contributed from the team total.
+            player = _get_player_or_404(db, last_event.player_id)
+            delta = int(last_event.points or 1)
+            if player.team_id == game.home_team_id:
+                game.home_score = max(game.home_score - delta, 0)
+            elif player.team_id == game.away_team_id:
+                game.away_score = max(game.away_score - delta, 0)
+        elif last_event.event_type == models.GameEventTypeEnum.ASSIST:
+            stats = _get_or_create_player_stats(
+                db, last_event.player_id, game.tournament_id
+            )
+            stats.assists = max(stats.assists - 1, 0)
+        elif last_event.event_type == models.GameEventTypeEnum.DEFENSE:
+            stats = _get_or_create_player_stats(
+                db, last_event.player_id, game.tournament_id
+            )
+            stats.defenses = max(stats.defenses - 1, 0)
+        # TIMEOUT and SUBSTITUTION (timeout-end marker) are pure markers —
+        # deleting them has no stat side-effects.
+
+        db.delete(last_event)
+        db.commit()
+        db.refresh(game)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not undo last event: {str(exc)}",
+        ) from exc
+
+    return game
+
+
+# ---------------------------------------------------------------------------
 # Convenience: game events list
 # ---------------------------------------------------------------------------
 @router.get("/{game_id}/events", response_model=List[schemas.GameEvent])

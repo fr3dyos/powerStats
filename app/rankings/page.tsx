@@ -32,7 +32,12 @@ export default async function RankingsPage() {
       teamsApi.listByTournament(t.id).catch(() => [] as Team[]),
       gamesApi.listByTournament(t.id).catch(() => [] as Game[]),
     ]);
-    return { tournament: t, teams, games };
+    // Spirit (SOTG) per tournament is optional: an empty list means no
+    // spirit has been recorded for this tournament yet, which is fine.
+    const spirit = await tournamentsApi
+      .spiritRanking(t.id)
+      .catch(() => ({ tournament_id: t.id, teams: [] }));
+    return { tournament: t, teams, games, spiritTeams: spirit.teams };
   });
 
   // --- Team rows: aggregate wins / losses / PF / PA / games played.
@@ -98,6 +103,20 @@ export default async function RankingsPage() {
   // Streak = max consecutive wins from the most recent games (per side).
   // Power score = wins*2 + (pf-pa)/10 — a stand-in until the backend ships
   // a real metric.
+  // Spirit (SOTG) is aggregated per tournament via the spirit-ranking
+  // endpoint, then averaged across tournaments the team has played in,
+  // weighted by the number of spirit-rated games each tournament has.
+  type SpiritAcc = { sum: number; games: number };
+  const teamSpirit = new Map<number, SpiritAcc>();
+  for (const { spiritTeams } of perTournament) {
+    for (const st of spiritTeams) {
+      if (!st.spirit_games || st.spirit_games <= 0) continue;
+      const cur = teamSpirit.get(st.team_id) ?? { sum: 0, games: 0 };
+      cur.sum += st.spirit_average * st.spirit_games;
+      cur.games += st.spirit_games;
+      teamSpirit.set(st.team_id, cur);
+    }
+  }
   for (const row of teamAgg.values()) {
     row.power = row.wins * 2 + (row.pf - row.pa) / 10;
     row.streak = computeStreakFromGames(perTournament, row.id, "team");
@@ -180,6 +199,11 @@ export default async function RankingsPage() {
   const teamRows: RankingRow[] = [...teamAgg.values()].map((r) => {
     const gamesPlayed = r.wins + r.losses + r.ties;
     const mvp = teamTopPlayer.get(r.id)?.name ?? null;
+    const spiritAcc = teamSpirit.get(r.id);
+    const spiritAverage =
+      spiritAcc && spiritAcc.games > 0
+        ? round2(spiritAcc.sum / spiritAcc.games)
+        : null;
     return {
       id: r.id,
       subject: r.name,
@@ -198,6 +222,8 @@ export default async function RankingsPage() {
       streak: r.streak,
       mvp,
       tournamentIds: r.tournamentIds,
+      spiritAverage,
+      spiritGames: spiritAcc?.games ?? 0,
     };
   });
   const playerRankingRows: RankingRow[] = [...playerRows.values()].map((r) => ({
@@ -218,6 +244,8 @@ export default async function RankingsPage() {
     streak: r.streak,
     mvp: null,
     tournamentIds: r.tournamentIds,
+    spiritAverage: null,
+    spiritGames: 0,
   }));
 
   const tournamentOptions = tournaments.map((t: Tournament) => ({
@@ -259,6 +287,7 @@ export default async function RankingsPage() {
           pf: common.pf,
           pa: common.pa,
           streak: dict.publicStats.streak,
+          spirit: dict.standings.spirit,
         }}
       />
     </AppShell>

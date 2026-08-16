@@ -159,6 +159,15 @@ export default async function TournamentDetailPage({
                     {dict.standings.title}
                   </Link>
                 ) : null}
+                {phases.length > 1 ? (
+                  <Link
+                    href={`/tournaments/${tournament.id}/phases`}
+                    className="ps-btn ps-btn--secondary"
+                    style={{ fontSize: 12, padding: "6px 12px" }}
+                  >
+                    {dict.adminTournaments.phases}
+                  </Link>
+                ) : null}
                 <Link
                   href={`/tournaments/${tournament.id}/bracket`}
                   className="ps-btn ps-btn--secondary"

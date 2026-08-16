@@ -7,12 +7,15 @@ import { AppShell } from "@/app/_components/AppShell";
 import {
   formatDate,
   gamesApi,
+  phasesApi,
   teamsApi,
   tournamentsApi,
   type Game,
+  type Phase,
 } from "@/utils/api";
 import { getServerLocale } from "@/utils/i18n-server";
 import { getAuthedUser } from "@/utils/supabase/server";
+import AdvanceRoundButton from "./_components/AdvanceRoundButton";
 
 export const dynamic = "force-dynamic";
 
@@ -146,15 +149,24 @@ const { dict } = await getServerLocale();
   const id = Number(rawId);
   if (!Number.isFinite(id)) notFound();
 
-  const [tournament, teams, games] = await Promise.all([
+  const [tournament, teams, games, phases] = await Promise.all([
     tournamentsApi.get(id).catch(() => null),
     teamsApi.listByTournament(id).catch(() => []),
     gamesApi.listByTournament(id).catch(() => []),
+    phasesApi.listByTournament(id).catch(() => [] as Phase[]),
   ]);
   if (!tournament) notFound();
 
   const teamMap = new Map<number, { id: number; name: string }>(
     teams.map((t) => [t.id, { id: t.id, name: t.name }] as const),
+  );
+
+  // Bracket phases in declaration order, used by the advance panel.
+  const sortedPhases = [...phases].sort(
+    (a, b) => a.phase_order - b.phase_order,
+  );
+  const bracketPhases = sortedPhases.filter(
+    (p) => p.phase_type === "bracket",
   );
   // Separate main bracket games from placement/consolation games.
   const bracketGames = games.filter(
@@ -253,6 +265,60 @@ const { dict } = await getServerLocale();
                 );
               })}
             </div>
+          </div>
+        ) : null}
+
+        {canScore && bracketPhases.length > 0 ? (
+          <div
+            className="ps-card"
+            style={{ padding: 16, marginBottom: 16 }}
+          >
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                marginBottom: 8,
+                color: "var(--ps-text-muted)",
+                textTransform: "uppercase",
+                letterSpacing: ".05em",
+              }}
+            >
+              {brk.advanceWinners}
+            </div>
+            {bracketPhases.map((phase) => {
+              const laterPhases = sortedPhases.filter(
+                (p) => p.phase_order > phase.phase_order,
+              );
+              return (
+                <div
+                  key={phase.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    flexWrap: "wrap",
+                    padding: "6px 0",
+                    borderBottom: "1px solid var(--ps-divider)",
+                  }}
+                >
+                  <span style={{ minWidth: 120, fontSize: 13, fontWeight: 600 }}>
+                    {phase.name}
+                  </span>
+                  <AdvanceRoundButton
+                    currentPhaseId={phase.id}
+                    laterPhases={laterPhases}
+                    label={brk.advanceWinners}
+                    choosePhaseLabel={brk.chooseTargetPhase}
+                    teamsPerGroupLabel={brk.teamsPerGroupPlaceholder}
+                    confirmLabel={brk.advanceConfirm}
+                    successLabel={brk.advanceSuccess}
+                    failureLabel={brk.advanceFailure}
+                    advancedLabel={brk.advancedCount}
+                    noTargetLabel={brk.noLaterPhase}
+                  />
+                </div>
+              );
+            })}
           </div>
         ) : null}
 

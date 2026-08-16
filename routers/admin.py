@@ -940,3 +940,65 @@ async def admin_import_spirit(
         ) from exc
 
     return SpiritImportReport(created=created, updated=updated, errors=errors)
+
+
+# ---------------------------------------------------------------------------
+# Per-game spirit score entry
+# ---------------------------------------------------------------------------
+class GameSpiritEntry(BaseModel):
+    """Per-side spirit score for a finished game.
+
+    Each side records a single 0–10 number (the WFDF 5-category total) which
+    the standings engine averages into ``spirit_average``. Either field is
+    optional so a scorekeeper can fill in home today and away later.
+    """
+
+    spirit_home: Optional[float] = Field(default=None, ge=0.0, le=10.0)
+    spirit_away: Optional[float] = Field(default=None, ge=0.0, le=10.0)
+
+
+class GameSpiritReport(BaseModel):
+    game_id: int
+    spirit_home: Optional[float]
+    spirit_away: Optional[float]
+
+
+@router.put(
+    "/games/{game_id}/spirit",
+    response_model=GameSpiritReport,
+)
+def admin_set_game_spirit(
+    game_id: int,
+    payload: GameSpiritEntry,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Record (or update) the home/away spirit scores for a single game.
+
+    Both sides are optional; omitting a side leaves its existing value
+    untouched. Scores are clamped to ``[0, 10]`` by the pydantic validator.
+    """
+    game = db.query(models.Game).filter(models.Game.id == game_id).first()
+    if game is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Game with id {game_id} not found.",
+        )
+    if payload.spirit_home is not None:
+        game.spirit_home = payload.spirit_home
+    if payload.spirit_away is not None:
+        game.spirit_away = payload.spirit_away
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not save spirit scores: {exc}",
+        ) from exc
+    db.refresh(game)
+    return GameSpiritReport(
+        game_id=game.id,
+        spirit_home=game.spirit_home,
+        spirit_away=game.spirit_away,
+    )

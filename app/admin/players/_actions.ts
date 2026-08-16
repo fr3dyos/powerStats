@@ -23,6 +23,7 @@ export async function createPlayerAction(
   const lastName = String(formData.get("last_name") ?? "").trim();
   const jerseyRaw = String(formData.get("jersey_number") ?? "").trim();
   const teamRaw = String(formData.get("team_id") ?? "").trim();
+  const photoFile = formData.get("photo_file");
 
   if (!firstName || !lastName || !teamRaw) {
     return { ok: false, error: "requiredFields" };
@@ -48,6 +49,13 @@ export async function createPlayerAction(
       jersey_number: jerseyNumber,
       team_id: teamId,
     });
+    if (photoFile instanceof File && photoFile.size > 0) {
+      try {
+        await playersApi.uploadPhoto(player.id, photoFile);
+      } catch (uploadErr) {
+        console.error("player photo upload failed", uploadErr);
+      }
+    }
     revalidatePath("/admin/players");
     revalidatePath(`/teams/${teamId}`);
     revalidatePath("/");
@@ -81,6 +89,7 @@ export async function updatePlayerAction(
   const lastName = String(formData.get("last_name") ?? "").trim();
   const jerseyRaw = String(formData.get("jersey_number") ?? "").trim();
   const teamRaw = String(formData.get("team_id") ?? "").trim();
+  const photoFile = formData.get("photo_file");
 
   if (!firstName || !lastName || !teamRaw) {
     return { ok: false, error: "requiredFields" };
@@ -106,6 +115,13 @@ export async function updatePlayerAction(
       jersey_number: jerseyNumber,
       team_id: teamId,
     });
+    if (photoFile instanceof File && photoFile.size > 0) {
+      try {
+        await playersApi.uploadPhoto(player.id, photoFile);
+      } catch (uploadErr) {
+        console.error("player photo upload failed", uploadErr);
+      }
+    }
     revalidatePath("/admin/players");
     revalidatePath(`/teams/${teamId}`);
     revalidatePath(`/players/${playerId}`);

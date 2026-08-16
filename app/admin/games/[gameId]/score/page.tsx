@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
 import { AppShell } from "@/app/_components/AppShell";
+import { getServerLocale } from "@/utils/i18n-server";
 import { getAuthedUser } from "@/utils/supabase/server";
 import {
   formatDate,
@@ -14,6 +15,7 @@ import {
 } from "@/utils/api";
 
 import { LiveScoringConsole } from "./_components/LiveScoringConsole";
+import SpiritEntryPanel from "./_components/SpiritEntryPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -55,17 +57,22 @@ export default async function LiveScoringPage({
   const accentHome = teamColor(homeTeam.name);
   const accentAway = teamColor(awayTeam.name);
 
+  const { dict } = await getServerLocale();
+  const sc = dict.scoreConsole;
+
   return (
     <AppShell
-      brandSubtitle={`${homeTeam.name} vs ${awayTeam.name} · Live scoring`}
+      brandSubtitle={sc.brandSubtitle
+        .replace("{home}", homeTeam.name)
+        .replace("{away}", awayTeam.name)}
       authLinks={[
         {
-          label: "← Tournament hub",
+          label: sc.backToTournamentHub,
           href: tournament ? `/tournaments/${tournament.id}` : "/tournaments",
           variant: "ghost",
         },
         {
-          label: "Bracket",
+          label: sc.bracket,
           href: tournament
             ? `/tournaments/${tournament.id}/bracket`
             : "/tournaments",
@@ -101,7 +108,7 @@ export default async function LiveScoringPage({
                 fontSize: 28,
               }}
             >
-              vs
+              {sc.vs}
             </span>
             <span
               className="ps-disc ps-disc--lg"
@@ -116,17 +123,15 @@ export default async function LiveScoringPage({
           </div>
           <div>
             <span className="ps-section__eyebrow">
-              {tournament?.name ?? "Tournament"} · Game #{game.id}
+              {tournament?.name ?? sc.tournamentFallback} · {sc.gameId.replace("{id}", String(game.id))}
             </span>
             <h1 style={{ marginTop: 4 }}>
-              {homeTeam.name} vs {awayTeam.name}
+              {homeTeam.name} {sc.vs} {awayTeam.name}
             </h1>
             <p style={{ color: "var(--ps-text-muted)", marginTop: 4 }}>
               {formatDate(game.start_time)}
-              {game.field_number ? ` · Field ${game.field_number}` : ""}
-              {!canEdit
-                ? " · Read-only — sign in as admin or scorekeeper to record events."
-                : null}
+              {game.field_number ? ` · ${sc.fieldLabel.replace("{number}", String(game.field_number))}` : ""}
+              {!canEdit ? ` · ${sc.readOnlyBanner}` : null}
             </p>
           </div>
         </div>
@@ -141,6 +146,15 @@ export default async function LiveScoringPage({
           canEdit={canEdit}
         />
 
+        <SpiritEntryPanel
+          gameId={game.id}
+          homeName={homeTeam.name}
+          awayName={awayTeam.name}
+          initialHome={game.spirit_home ?? null}
+          initialAway={game.spirit_away ?? null}
+          canEdit={canEdit}
+        />
+
         <div style={{ marginTop: 24 }}>
           <Link
             href={
@@ -148,7 +162,7 @@ export default async function LiveScoringPage({
             }
             className="ps-btn ps-btn--ghost"
           >
-            ← Back to tournament
+            {sc.backToTournament}
           </Link>
         </div>
       </section>

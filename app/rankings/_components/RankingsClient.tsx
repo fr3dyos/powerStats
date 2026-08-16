@@ -25,6 +25,10 @@ export type RankingRow = {
   streak: number;
   mvp: string | null;
   tournamentIds: number[];
+  /** Spirit (SOTG) average across all games the team has been scored in. */
+  spiritAverage: number | null;
+  /** Number of games the team has a spirit score recorded for. */
+  spiritGames: number;
 };
 
 type TournamentOption = { id: number; name: string };
@@ -57,6 +61,7 @@ type Labels = {
   pf: string;
   pa: string;
   streak: string;
+  spirit: string;
 };
 
 type Props = {
@@ -83,7 +88,8 @@ type SortKey =
   | "defensesAvg"
   | "power"
   | "streak"
-  | "mvp";
+  | "mvp"
+  | "spirit";
 
 type ColumnDef = {
   key: SortKey;
@@ -103,6 +109,7 @@ function buildColumns(mode: Mode, labels: Labels): ColumnDef[] {
       { key: "goalsAgainst", label: labels.pa, numeric: true, sortable: true },
       { key: "goalsAvg", label: labels.goalsAvg, numeric: true, sortable: true },
       { key: "power", label: labels.power, numeric: true, sortable: true },
+      { key: "spirit", label: labels.spirit, numeric: true, sortable: true },
       { key: "mvp", label: labels.mvp, numeric: false, sortable: true },
       { key: "streak", label: labels.streak, numeric: true, sortable: true },
     ];
@@ -156,6 +163,9 @@ function getValue(row: RankingRow, key: SortKey): string | number {
       return row.streak;
     case "mvp":
       return row.mvp ?? "—";
+    case "spirit":
+      // Rows without a spirit score sort to the bottom regardless of dir.
+      return row.spiritAverage ?? -1;
   }
 }
 
@@ -311,6 +321,16 @@ export function RankingsClient({
     }
     if (col.key === "mvp") {
       return <td>{row.mvp ?? "—"}</td>;
+    }
+    if (col.key === "spirit") {
+      if (row.spiritAverage === null || row.spiritGames === 0) {
+        return <td style={{ textAlign: "right" }}>—</td>;
+      }
+      return (
+        <td style={{ textAlign: "right" }} title={`${row.spiritGames} games`}>
+          {formatDecimal(row.spiritAverage)}
+        </td>
+      );
     }
     if (col.key === "streak") {
       return (

@@ -26,6 +26,8 @@ type PlayerEditFormProps = {
     jersey: string;
     team: string;
     selectTeam: string;
+    photoFile: string;
+    photoFileHint: string;
     save: string;
     cancel: string;
     back: string;
@@ -56,6 +58,7 @@ export default function PlayerEditForm({
     initial.jersey_number === null ? "" : String(initial.jersey_number),
   );
   const [teamId, setTeamId] = useState<string>(String(initial.team_id));
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -91,6 +94,7 @@ export default function PlayerEditForm({
     formData.set("last_name", lastName.trim());
     formData.set("jersey_number", jersey.trim());
     formData.set("team_id", teamId);
+    if (photoFile) formData.set("photo_file", photoFile);
 
     startTransition(async () => {
       const result = await updatePlayerAction(playerId, formData);
@@ -199,6 +203,21 @@ export default function PlayerEditForm({
               </optgroup>
             ))}
           </select>
+        </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontSize: 12, fontWeight: 600 }}>{copy.photoFile}</span>
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              setPhotoFile(file);
+            }}
+            className="ps-input"
+          />
+          <span style={{ fontSize: 11, color: "var(--ps-text-muted)" }}>
+            {copy.photoFileHint}
+          </span>
         </label>
       </div>
 

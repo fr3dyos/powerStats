@@ -100,6 +100,8 @@ authLinks={[
             jersey: at.jersey,
             team: at.team,
             selectTeam: at.selectTeam,
+            photoFile: at.photoFile,
+            photoFileHint: at.photoFileHint,
             save: at.save,
             cancel: at.cancel,
             requiredFields: at.requiredFields,
