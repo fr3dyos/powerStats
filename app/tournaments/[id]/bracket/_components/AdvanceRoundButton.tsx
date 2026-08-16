@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { phasesApi, type Phase } from "@/utils/api-shared";
+import { type Phase } from "@/utils/api-shared";
 
 type Props = {
   currentPhaseId: number;
@@ -69,11 +69,19 @@ export default function AdvanceRoundButton({
     setBusy(true);
     setMessage(null);
     try {
-      const result = await phasesApi.advance(
-        currentPhaseId,
-        Number(targetId),
-        tpg,
-      );
+      const res = await fetch(`/api/phases/${currentPhaseId}/advance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target_phase_id: Number(targetId),
+          teams_per_group: tpg,
+        }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(detail.detail ?? "Advance failed");
+      }
+      const result = await res.json();
       const count = result.advanced_team_ids?.length ?? 0;
       setMessage(`${successLabel} ${advancedLabel.replace("{count}", String(count))}`);
     } catch (err) {

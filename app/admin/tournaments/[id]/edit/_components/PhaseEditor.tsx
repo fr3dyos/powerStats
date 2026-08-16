@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 
-import { phasesApi, type Phase } from "@/utils/api-shared";
+import { type Phase } from "@/utils/api-shared";
 
 type Props = {
   phase: Phase;
@@ -106,7 +106,16 @@ export default function PhaseEditor({
     setSaving(true);
     setError(null);
     try {
-      const updated = await phasesApi.update(phase.id, draft);
+      const res = await fetch(`/api/phases/${phase.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(detail.detail ?? "Update failed");
+      }
+      const updated = await res.json();
       onChange(updated);
       setEditing(false);
     } catch (err) {
@@ -123,7 +132,13 @@ export default function PhaseEditor({
     setDeleting(true);
     setError(null);
     try {
-      await phasesApi.remove(phase.id);
+      const res = await fetch(`/api/phases/${phase.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(detail.detail ?? "Delete failed");
+      }
       onDelete(phase.id);
     } catch (err) {
       setDeleting(false);
