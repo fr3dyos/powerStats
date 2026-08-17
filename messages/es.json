@@ -505,6 +505,8 @@
     "importRosterTemplate": "Plantilla CSV",
     "bulkImportColumnHelp": "Columnas requeridas: player name, player number, team, y 'player lastname' o 'player last name'. Opcionales: gender, nationality, other. Los equipos se crean automáticamente.",
     "bulkImportSummary": "Se importaron {teams} equipo(s) y {players} jugador(es).",
+    "bulkImportTeamsColumnHelp": "Requerido: team o name. Opcional: logo_url, logo. Los equipos se crean automáticamente o se vinculan a equipos existentes.",
+    "bulkImportTeamsSummary": "Se importaron {teams} equipo(s).",
     "previewImport": "Vista previa",
     "confirmImport": "Confirmar importación",
     "backToIdle": "Atrás",

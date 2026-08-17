@@ -505,6 +505,8 @@
     "importRosterTemplate": "CSV template",
     "bulkImportColumnHelp": "Required columns: player name, player number, team, and either 'player lastname' or 'player last name'. Optional: gender, nationality, other. Teams are auto-created.",
     "bulkImportSummary": "Imported {teams} team(s) and {players} player(s).",
+    "bulkImportTeamsColumnHelp": "Required: team or name. Optional: logo_url, logo. Teams are auto-created or linked to existing teams.",
+    "bulkImportTeamsSummary": "Imported {teams} team(s).",
     "previewImport": "Preview import",
     "confirmImport": "Confirm import",
     "backToIdle": "Back",

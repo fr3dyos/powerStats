@@ -92,6 +92,45 @@ these names):
 The `other` column is intentionally free-form so admins can record
 handedness, dietary notes, or anything else without a schema change.
 
+#### CSV Team Import
+
+Teams can also be bulk-imported from a CSV. Open `/admin/tournaments/<id>/edit`,
+scroll to the **Import Teams** card, drop the CSV, and walk through the
+three-step staging flow before any rows are written to the database.
+
+**Column mapping**
+
+The CSV header names are not fixed — the panel **detects them
+case-insensitively** and then lets the admin override the mapping via
+dropdowns. So a file with `Team`, `Logo` is just as valid as one with
+`name`, `logo_url`.
+
+**Fields** (any reasonable header is accepted; the panel auto-matches
+these names):
+
+| Logical field | Required | Example | Notes |
+|---|---|---|---|
+| `team` or `name` | yes | `Poeira` | team name |
+| `logo_url` or `logo` | no | `https://...` | URL to team logo image |
+
+**Flow:**
+
+1. Drop the CSV. The client parses the file and reads the header row.
+2. The **Map columns** card shows dropdowns for team name and logo URL.
+   Pre-filled by auto-detection. Required fields are marked with `*`.
+   Hit **Preview import** once each required field is mapped.
+3. The browser calls `POST /api/admin/tournaments/<id>/bulk-import-teams/preview`
+   with the parsed rows and the chosen `column_map`. FastAPI dry-runs
+   the import and returns the teams that would be created, plus any
+   per-row validation errors, without writing anything.
+4. Inspect and edit the proposed table — all cells are editable. Team name
+   is required; logo URL is optional. Remove unwanted rows with the ×
+   button. Count of teams to create and any errors appear above the table.
+   Click **Confirm import** to call
+   `POST /api/admin/tournaments/<id>/bulk-import-teams/commit` with your
+   edits, which finally persists the rows. Or click **Back** to adjust
+   the column mapping.
+
 ### Live Scoring Console
 - Goal, assist, and defense recording
 - Timeout management (max 2 per team per half)

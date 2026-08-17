@@ -6,6 +6,7 @@ import type { Tournament, Phase, Team } from "@/utils/api-shared";
 
 import PhaseEditor from "./PhaseEditor";
 import TeamsAndPlayersPanel from "./TeamsAndPlayersPanel";
+import TeamsBulkImportPanel from "./TeamsBulkImportPanel";
 
 type Props = {
   tournament: Tournament;
@@ -75,6 +76,8 @@ type Props = {
     removeRow: string;
     newTeam: string;
     rowInvalid: string;
+    bulkImportTeamsColumnHelp: string;
+    bulkImportTeamsSummary: string;
   };
   canEdit: boolean;
 };
@@ -310,6 +313,30 @@ export function TournamentEditForm({
           </div>
         )}
       </form>
+
+      <TeamsBulkImportPanel
+        tournamentId={tournament.id}
+        labels={{
+          importRoster: labels.importRoster,
+          uploadCSVXLSX: labels.uploadCSVXLSX,
+          dragDropHint: labels.dragDropHint,
+          submit: labels.submit,
+          cancel: labels.cancel,
+          loading: labels.loading,
+          previewImport: labels.previewImport,
+          confirmImport: labels.confirmImport,
+          backToIdle: labels.backToIdle,
+          teamsToCreate: labels.teamsToCreate,
+          rowErrors: labels.rowErrors,
+          mappingTitle: labels.mappingTitle,
+          mappingHelp: labels.bulkImportTeamsColumnHelp,
+          noColumn: labels.noColumn,
+          requiredField: labels.requiredField,
+          removeRow: labels.removeRow,
+          newTeam: labels.newTeam,
+          rowInvalid: labels.rowInvalid,
+        }}
+      />
 
       <TeamsAndPlayersPanel
         tournamentId={tournament.id}

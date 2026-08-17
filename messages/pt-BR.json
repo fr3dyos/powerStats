@@ -505,6 +505,8 @@
     "importRosterTemplate": "Modelo CSV",
     "bulkImportColumnHelp": "Colunas obrigatórias: player name, player number, team, e 'player lastname' ou 'player last name'. Opcionais: gender, nationality, other. Os times são criados automaticamente.",
     "bulkImportSummary": "Importados {teams} time(s) e {players} jogador(es).",
+    "bulkImportTeamsColumnHelp": "Obrigatório: team ou name. Opcional: logo_url, logo. Os times são criados automaticamente ou vinculados a times existentes.",
+    "bulkImportTeamsSummary": "Importados {teams} time(s).",
     "previewImport": "Pré-visualizar",
     "confirmImport": "Confirmar importação",
     "backToIdle": "Voltar",

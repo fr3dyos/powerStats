@@ -152,6 +152,8 @@ export default async function EditTournamentPage({
             removeRow: at.removeRow,
             newTeam: at.newTeam,
             rowInvalid: at.rowInvalid,
+            bulkImportTeamsColumnHelp: at.bulkImportTeamsColumnHelp,
+            bulkImportTeamsSummary: at.bulkImportTeamsSummary,
           }}
           canEdit={role === "admin"}
         />
