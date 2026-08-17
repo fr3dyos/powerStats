@@ -41,6 +41,42 @@ GitHub: [@fr3dyos](https://github.com/fr3dyos)
   status badges, and one-click jump to the scoring console
 - Roster and spirit-score import from Excel/CSV (via `/roster`, `/spirit/import`)
 
+#### CSV Roster Import
+
+Tournament roster can be bulk-imported from a CSV with six columns. Open
+`/admin/tournaments/<id>/edit`, drop the CSV in the **Import roster** card,
+and walk through the two-step staging flow before any rows are written to
+the database.
+
+**Columns:**
+
+| Column | Required | Example | Notes |
+|---|---|---|---|
+| `player name` | yes | `Ana` | first name |
+| `player lastname` (or `player last name`) | yes | `Silva` | both spellings accepted |
+| `player number` | yes | `7` | jersey number, integer |
+| `team` | yes | `Poeira` | team name; created if it does not exist |
+| `gender` | no | `F` | free-form, e.g. `M`, `F`, `mixed`, `open` |
+| `nationality` | no | `BRA` | defaults to a single space |
+| `other` | no | `right-handed` | free notes (handedness, dietary, etc.) |
+
+**Flow:**
+
+1. Drop the CSV. Client-side parser checks headers — missing required
+   columns raise an inline error before any network call.
+2. Click **Preview import**. The browser calls
+   `POST /api/admin/tournaments/<id>/bulk-import/preview`, which forwards
+   to FastAPI's dry-run endpoint. The preview returns the teams +
+   players that would be created, plus any per-row validation errors,
+   without writing anything.
+3. Inspect the proposed table — counts of teams to create, players to
+   create, rows with errors. Click **Confirm import** to call
+   `POST /api/admin/tournaments/<id>/bulk-import/commit`, which finally
+   persists the rows. Or click **Back** to start over with a new file.
+
+The `other` column is intentionally free-form so admins can record
+handedness, dietary notes, or anything else without a schema change.
+
 ### Live Scoring Console
 - Goal, assist, and defense recording
 - Timeout management (max 2 per team per half)

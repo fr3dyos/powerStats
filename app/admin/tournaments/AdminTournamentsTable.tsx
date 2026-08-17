@@ -65,7 +65,7 @@ export default function AdminTournamentsTable({
         matchesQuery(query, [
           r.tournament.name,
           r.tournament.location ?? "",
-          r.tournament.status ?? "",
+          (r.tournament as Tournament & { status?: string | null }).status ?? "",
           r.teams.map((t) => t.name).join(" "),
         ]),
       ),

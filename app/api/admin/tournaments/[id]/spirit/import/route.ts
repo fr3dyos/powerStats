@@ -14,7 +14,8 @@ function resolveBaseUrl(): string {
 
 async function readAccessToken(): Promise<string | null> {
   try {
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createClient(cookieStore);
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token ?? null;
   } catch {

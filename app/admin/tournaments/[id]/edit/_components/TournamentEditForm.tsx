@@ -55,6 +55,19 @@ type Props = {
     bulkImportColumnHelp: string;
     bulkImportSummary: string;
     exportCsv: string;
+    previewImport: string;
+    confirmImport: string;
+    backToIdle: string;
+    teamsToCreate: string;
+    playersToCreate: string;
+    rowErrors: string;
+    gender: string;
+    nationality: string;
+    other: string;
+    teamColumn: string;
+    nameColumn: string;
+    lastnameColumn: string;
+    numberColumn: string;
   };
   canEdit: boolean;
 };
@@ -294,7 +307,7 @@ export function TournamentEditForm({
       <TeamsAndPlayersPanel
         tournamentId={tournament.id}
         teams={teams}
-        onTeamsUpdated={setTeams}
+        onTeamsUpdated={(t: Team[]) => setTeams(t)}
         labels={{
           teams: labels.teams,
           addTeam: labels.addTeam,
@@ -310,6 +323,19 @@ export function TournamentEditForm({
           bulkImportColumnHelp: labels.bulkImportColumnHelp,
           bulkImportSummary: labels.bulkImportSummary,
           exportCsv: labels.exportCsv,
+          previewImport: labels.previewImport,
+          confirmImport: labels.confirmImport,
+          backToIdle: labels.backToIdle,
+          teamsToCreate: labels.teamsToCreate,
+          playersToCreate: labels.playersToCreate,
+          rowErrors: labels.rowErrors,
+          gender: labels.gender,
+          nationality: labels.nationality,
+          other: labels.other,
+          teamColumn: labels.teamColumn,
+          nameColumn: labels.nameColumn,
+          lastnameColumn: labels.lastnameColumn,
+          numberColumn: labels.numberColumn,
         }}
       />
 
@@ -446,6 +472,7 @@ export function TournamentEditForm({
                   suggestSchedule: labels.suggestSchedule,
                   suggestScheduleFailed: labels.suggestScheduleFailed,
                   suggestScheduleSuccess: labels.suggestScheduleSuccess,
+                  suggestScheduleFieldCount: labels.suggestScheduleFieldCount,
                   groupCount: labels.groupCount,
                   advancingTeams: labels.advancingTeams,
                   tiebreakers: labels.tiebreakers,
@@ -454,7 +481,6 @@ export function TournamentEditForm({
             ))}
           </div>
         )}
-      </div>
     </div>
   );
 }

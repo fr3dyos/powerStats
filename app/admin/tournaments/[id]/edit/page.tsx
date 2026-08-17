@@ -56,6 +56,7 @@ export default async function EditTournamentPage({
   const dashboard = dict.adminDashboard;
   const at = dict.adminTournaments;
   const ap = dict.adminPanel;
+  const common = dict.common;
 
   return (
     <AppShell
@@ -131,6 +132,19 @@ export default async function EditTournamentPage({
             bulkImportColumnHelp: at.bulkImportColumnHelp,
             bulkImportSummary: at.bulkImportSummary,
             exportCsv: common.exportCsv,
+            previewImport: at.previewImport,
+            confirmImport: at.confirmImport,
+            backToIdle: at.backToIdle,
+            teamsToCreate: at.teamsToCreate,
+            playersToCreate: at.playersToCreate,
+            rowErrors: at.rowErrors,
+            gender: at.gender,
+            nationality: at.nationality,
+            other: at.other,
+            teamColumn: at.teamColumn,
+            nameColumn: at.nameColumn,
+            lastnameColumn: at.lastnameColumn,
+            numberColumn: at.numberColumn,
           }}
           canEdit={role === "admin"}
         />

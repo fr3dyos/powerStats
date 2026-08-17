@@ -17,6 +17,25 @@ type Player = {
   last_name: string;
   jersey_number?: number | null;
   team_id?: number;
+  gender?: string | null;
+  nationality?: string | null;
+  other?: string | null;
+};
+
+type BulkImportPreview = {
+  teams_to_create?: number;
+  players_to_create?: number;
+  proposed_teams?: Array<{ name: string; tournament_id: number }>;
+  proposed_players?: Array<{
+    first_name: string;
+    last_name: string;
+    jersey_number?: number | null;
+    team_name?: string | null;
+    gender?: string | null;
+    nationality?: string | null;
+    other?: string | null;
+  }>;
+  errors?: Array<{ row: number; reason: string }>;
 };
 
 type BulkImportReport = {
@@ -24,9 +43,11 @@ type BulkImportReport = {
   players_created?: number;
   teams?: Team[];
   players?: Player[];
-  errors?: string[];
+  errors?: Array<{ row: number; reason: string }> | string[];
   [k: string]: unknown;
 };
+
+type Stage = "idle" | "previewing" | "previewed" | "committing";
 
 type Props = {
   tournamentId: number;
@@ -47,6 +68,19 @@ type Props = {
     bulkImportColumnHelp: string;
     bulkImportSummary: string;
     exportCsv: string;
+    previewImport: string;
+    confirmImport: string;
+    backToIdle: string;
+    teamsToCreate: string;
+    playersToCreate: string;
+    rowErrors: string;
+    gender: string;
+    nationality: string;
+    other: string;
+    teamColumn: string;
+    nameColumn: string;
+    lastnameColumn: string;
+    numberColumn: string;
   };
 };
 
@@ -61,12 +95,17 @@ export default function TeamsAndPlayersPanel({
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(
-    null
+    null,
   );
   const [dragActive, setDragActive] = useState(false);
   const [roster, setRoster] = useState<
     Array<Player & { team_name: string }>
   >([]);
+
+  // Two-step staging state.
+  const [stage, setStage] = useState<Stage>("idle");
+  const [parsedRows, setParsedRows] = useState<Record<string, string>[]>([]);
+  const [preview, setPreview] = useState<BulkImportPreview | null>(null);
 
   // Fetch roster (players grouped by team) any time the team list changes.
   useEffect(() => {
@@ -137,6 +176,9 @@ export default function TeamsAndPlayersPanel({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       setFile(e.target.files[0]);
+      setMessage(null);
+      setPreview(null);
+      setStage("idle");
     }
   };
 
@@ -156,66 +198,124 @@ export default function TeamsAndPlayersPanel({
     setDragActive(false);
     if (e.dataTransfer.files?.[0]) {
       setFile(e.dataTransfer.files[0]);
+      setMessage(null);
+      setPreview(null);
+      setStage("idle");
     }
   };
 
-  const handleBulkImport = async () => {
+  /**
+   * Read the file and validate its headers. Returns the parsed rows or
+   * throws an Error with a human-readable message that the caller can
+   * surface as a `setMessage({ ok: false, ... })`.
+   */
+  const parseAndValidate = async (
+    f: File,
+  ): Promise<Record<string, string>[]> => {
+    const text = await f.text();
+    let rows: Record<string, string>[] = [];
+
+    Papa.parse<Record<string, string>>(text, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        rows = results.data;
+      },
+      error: (err) => {
+        throw new Error(`CSV parse error: ${err.message}`);
+      },
+    });
+
+    if (rows.length === 0) {
+      throw new Error("No rows found in file");
+    }
+
+    // Validate required columns. "player lastname" and "player last name"
+    // are interchangeable; we accept either.
+    const requiredCols = ["player name", "player number", "team"];
+    const lastnameCols = ["player lastname", "player last name"];
+    const headers = Object.keys(rows[0] || {}).map((h) =>
+      h.toLowerCase().trim(),
+    );
+    const missing = requiredCols.filter((col) => !headers.includes(col));
+    const hasLastname = lastnameCols.some((col) => headers.includes(col));
+    if (missing.length > 0) {
+      throw new Error(`Missing required columns: ${missing.join(", ")}`);
+    }
+    if (!hasLastname) {
+      throw new Error(
+        `Missing required column: "player lastname" or "player last name"`,
+      );
+    }
+    return rows;
+  };
+
+  /**
+   * Step 1: parse the CSV locally and call /preview. Render the proposed
+   * teams + players for the user to inspect before any DB writes happen.
+   */
+  const handlePreviewImport = async () => {
     if (!file) {
       setMessage({ ok: false, text: "Please select a file" });
       return;
     }
 
     setBusy(true);
+    setStage("previewing");
     setMessage(null);
+    setPreview(null);
 
     try {
-      const text = await file.text();
-      let rows: Record<string, string>[] = [];
+      const rows = await parseAndValidate(file);
+      setParsedRows(rows);
 
-      // Parse CSV
-      Papa.parse(text, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          rows = results.data as Record<string, string>[];
-        },
-        error: (err) => {
-          throw new Error(`CSV parse error: ${err.message}`);
-        },
-      });
-
-      if (rows.length === 0) {
-        throw new Error("No rows found in file");
-      }
-
-      // Validate required columns. "player lastname" and "player last name"
-      // are interchangeable; we accept either.
-      const requiredCols = ["player name", "player number", "team"];
-      const lastnameCols = ["player lastname", "player last name"];
-      const headers = Object.keys(rows[0] || {}).map((h) =>
-        h.toLowerCase().trim(),
-      );
-      const missing = requiredCols.filter((col) => !headers.includes(col));
-      const hasLastname = lastnameCols.some((col) => headers.includes(col));
-      if (missing.length > 0) {
-        throw new Error(
-          `Missing required columns: ${missing.join(", ")}`,
-        );
-      }
-      if (!hasLastname) {
-        throw new Error(
-          `Missing required column: "player lastname" or "player last name"`,
-        );
-      }
-
-      // Send to backend
       const res = await fetch(
-        `/api/admin/tournaments/${tournamentId}/bulk-import`,
+        `/api/admin/tournaments/${tournamentId}/bulk-import/preview`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ players: rows }),
-        }
+        },
+      );
+
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        throw new Error(detail?.detail ?? "Preview failed");
+      }
+
+      const previewData: BulkImportPreview = await res.json();
+      setPreview(previewData);
+      setStage("previewed");
+    } catch (err) {
+      setStage("idle");
+      setMessage({
+        ok: false,
+        text: err instanceof Error ? err.message : "Preview failed",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Step 2: persist the same rows the user just previewed. The backend
+   * returns the updated teams list so we can sync the parent component.
+   */
+  const handleConfirmImport = async () => {
+    if (!preview || stage !== "previewed") return;
+
+    setBusy(true);
+    setStage("committing");
+    setMessage(null);
+
+    try {
+      const res = await fetch(
+        `/api/admin/tournaments/${tournamentId}/bulk-import/commit`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ players: parsedRows }),
+        },
       );
 
       if (!res.ok) {
@@ -227,13 +327,21 @@ export default function TeamsAndPlayersPanel({
       const updatedTeams = report.teams || teams;
       setTeams(updatedTeams);
       onTeamsUpdated(updatedTeams);
-      setFile(null);
 
       const summary = labels.bulkImportSummary
         .replace("{teams}", String(report.teams_created || 0))
         .replace("{players}", String(report.players_created || 0));
       setMessage({ ok: true, text: summary });
+
+      // Reset the staging state so the user can drop a new file without
+      // the preview lingering.
+      setStage("idle");
+      setPreview(null);
+      setParsedRows([]);
+      setFile(null);
     } catch (err) {
+      // Stay in previewed state so the user can retry without re-uploading.
+      setStage("previewed");
       setMessage({
         ok: false,
         text: err instanceof Error ? err.message : "Import failed",
@@ -241,6 +349,21 @@ export default function TeamsAndPlayersPanel({
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleBackToIdle = () => {
+    setStage("idle");
+    setPreview(null);
+    setMessage(null);
+  };
+
+  // Convenience: render a `—` for the three optional profile fields when
+  // they're either absent or just the single-space default sentinel.
+  const displayValue = (v: string | null | undefined) => {
+    if (v == null) return "—";
+    const trimmed = v.trim();
+    if (trimmed.length === 0) return "—";
+    return v;
   };
 
   return (
@@ -341,7 +464,7 @@ export default function TeamsAndPlayersPanel({
               {labels.dragDropHint}
             </div>
           </label>
-        </label>
+        </div>
 
         <details style={{ marginBottom: 16, fontSize: 12 }}>
           <summary style={{ cursor: "pointer", fontWeight: 600 }}>
@@ -377,26 +500,154 @@ export default function TeamsAndPlayersPanel({
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            type="button"
-            className="ps-btn ps-btn--primary"
-            onClick={handleBulkImport}
-            disabled={busy || !file}
-          >
-            {busy ? labels.loading : labels.submit}
-          </button>
-          {file && (
+        {/* Stage 1 controls (idle): preview button */}
+        {stage === "idle" || stage === "previewing" ? (
+          <div style={{ display: "flex", gap: 8 }}>
             <button
               type="button"
-              className="ps-btn ps-btn--ghost"
-              onClick={() => setFile(null)}
-              disabled={busy}
+              className="ps-btn ps-btn--primary"
+              onClick={handlePreviewImport}
+              disabled={busy || !file}
             >
-              {labels.cancel}
+              {stage === "previewing" ? labels.loading : labels.previewImport}
             </button>
-          )}
-        </div>
+            {file && (
+              <button
+                type="button"
+                className="ps-btn ps-btn--ghost"
+                onClick={() => {
+                  setFile(null);
+                  setMessage(null);
+                  setPreview(null);
+                  setStage("idle");
+                }}
+                disabled={busy}
+              >
+                {labels.cancel}
+              </button>
+            )}
+          </div>
+        ) : null}
+
+        {/* Stage 2: preview table + confirm */}
+        {stage === "previewed" && preview ? (
+          <div
+            style={{
+              border: "1px solid var(--ps-border)",
+              borderRadius: 6,
+              padding: 12,
+              marginBottom: 16,
+              background: "var(--ps-surface-container-low)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 12,
+                marginBottom: 12,
+                fontSize: 13,
+              }}
+            >
+              <strong>
+                {labels.teamsToCreate.replace(
+                  "{count}",
+                  String(preview.teams_to_create ?? 0),
+                )}
+              </strong>
+              <strong>
+                {labels.playersToCreate.replace(
+                  "{count}",
+                  String(preview.players_to_create ?? 0),
+                )}
+              </strong>
+              {preview.errors && preview.errors.length > 0 ? (
+                <strong style={{ color: "#F44336" }}>
+                  {labels.rowErrors.replace(
+                    "{count}",
+                    String(preview.errors.length),
+                  )}
+                </strong>
+              ) : null}
+            </div>
+
+            {preview.errors && preview.errors.length > 0 ? (
+              <details style={{ marginBottom: 12, fontSize: 12 }}>
+                <summary style={{ cursor: "pointer", fontWeight: 600 }}>
+                  {labels.rowErrors.replace(
+                    "{count}",
+                    String(preview.errors.length),
+                  )}
+                </summary>
+                <ul style={{ margin: "8px 0 0 0", paddingLeft: 20 }}>
+                  {preview.errors.map((e, i) => (
+                    <li key={i}>
+                      Row {e.row}: {e.reason}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+
+            {preview.proposed_players &&
+            preview.proposed_players.length > 0 ? (
+              <div style={{ overflowX: "auto", marginBottom: 12 }}>
+                <table className="ps-table" style={{ fontSize: 12 }}>
+                  <thead>
+                    <tr>
+                      <th>{labels.teamColumn}</th>
+                      <th>{labels.nameColumn}</th>
+                      <th>{labels.lastnameColumn}</th>
+                      <th>{labels.numberColumn}</th>
+                      <th>{labels.gender}</th>
+                      <th>{labels.nationality}</th>
+                      <th>{labels.other}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.proposed_players.map((p, i) => (
+                      <tr key={i}>
+                        <td>{p.team_name ?? "—"}</td>
+                        <td>{p.first_name}</td>
+                        <td>{p.last_name}</td>
+                        <td>{p.jersey_number ?? "—"}</td>
+                        <td>{displayValue(p.gender)}</td>
+                        <td>{displayValue(p.nationality)}</td>
+                        <td>{displayValue(p.other)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                className="ps-btn ps-btn--primary"
+                onClick={handleConfirmImport}
+                disabled={busy || (preview.players_to_create ?? 0) === 0}
+              >
+                {labels.confirmImport}
+              </button>
+              <button
+                type="button"
+                className="ps-btn ps-btn--ghost"
+                onClick={handleBackToIdle}
+                disabled={busy}
+              >
+                {labels.backToIdle}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Stage 2 committing indicator */}
+        {stage === "committing" ? (
+          <div style={{ fontSize: 13, color: "var(--ps-text-muted)" }}>
+            {labels.loading}…
+          </div>
+        ) : null}
       </div>
 
       {/* Existing roster */}
@@ -421,6 +672,9 @@ export default function TeamsAndPlayersPanel({
               first_name: r.first_name,
               last_name: r.last_name,
               number: r.jersey_number ?? "",
+              gender: r.gender ?? "",
+              nationality: r.nationality ?? "",
+              other: r.other ?? "",
             }))}
           />
         </div>

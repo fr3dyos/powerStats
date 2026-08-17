@@ -159,6 +159,13 @@ class Player(Base):
     jersey_number = Column(Integer)
     team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
     photo_url = Column(String(255))
+    # Optional profile fields populated by the CSV bulk roster import.
+    # `gender` is intentionally nullable — mixed/open tournaments may leave it
+    # unset. `nationality` and `other` default to a single space (the
+    # project-wide "no value" sentinel) so callers can rely on NOT NULL.
+    gender = Column(String(16))
+    nationality = Column(String(64), server_default=" ", default=" ")
+    other = Column(Text, server_default=" ", default=" ")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

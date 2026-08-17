@@ -23,7 +23,7 @@ consistently::
 """
 
 import io
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
@@ -1014,6 +1014,7 @@ class BulkPlayerImportRow(BaseModel):
     player_number: str = Field(..., alias="player number")
     team: str
     gender: Optional[str] = None
+    nationality: Optional[str] = None
     other: Optional[str] = None
 
     class Config:
@@ -1034,6 +1035,266 @@ class BulkImportReport(BaseModel):
     errors: List[dict] = []
 
 
+class BulkImportPreview(BaseModel):
+    """Dry-run result: counts + the rows the import WOULD create, no DB writes.
+
+    `proposed_teams` and `proposed_players` carry just enough fields for the
+    admin UI to render a confirmation table (name + jersey + profile
+    columns). No DB IDs are populated because nothing is persisted.
+    """
+    teams_to_create: int = 0
+    players_to_create: int = 0
+    proposed_teams: List[dict] = []
+    proposed_players: List[dict] = []
+    errors: List[dict] = []
+
+
+def _normalize_bulk_row(idx: int, row: dict) -> Dict[str, Optional[str]]:
+    """Extract the normalized cell values from one CSV row.
+
+    Returns a dict with all six known fields (lastname, team, etc.). Throws
+    ValueError for rows that are structurally invalid or missing required
+    fields, so the caller can record a clean `{row, reason}` error.
+    """
+    if not isinstance(row, dict):
+        raise ValueError("Row is not a dict")
+
+    row_lower = {k.strip().lower(): v for k, v in row.items()}
+
+    player_name = str(row_lower.get("player name", "")).strip()
+    # Accept both "player lastname" and "player last name" as headers.
+    player_lastname = (
+        str(row_lower.get("player lastname", "")).strip()
+        or str(row_lower.get("player last name", "")).strip()
+    )
+    player_number = str(row_lower.get("player number", "")).strip()
+    team_name = str(row_lower.get("team", "")).strip()
+    gender = str(row_lower.get("gender", "")).strip() or None
+    nationality = str(row_lower.get("nationality", "")).strip() or None
+    other = str(row_lower.get("other", "")).strip() or None
+
+    if not player_name or not player_lastname or not team_name:
+        raise ValueError("Missing required fields (name, lastname, team)")
+
+    return {
+        "player_name": player_name,
+        "player_lastname": player_lastname,
+        "player_number": player_number,
+        "team_name": team_name,
+        "gender": gender,
+        "nationality": nationality,
+        "other": other,
+    }
+
+
+def _process_bulk_rows(
+    tournament_id: int,
+    rows: List[dict],
+    db: Session,
+    *,
+    persist: bool,
+) -> Tuple[List[models.Team], List[models.Player], List[dict]]:
+    """Shared core for the bulk-import preview + commit endpoints.
+
+    When `persist=True` newly-created teams/players are added to the
+    session and the caller is expected to commit. When `persist=False`
+    we still `flush()` so we can read auto-generated IDs, but nothing is
+    persisted: the caller is expected to rollback.
+
+    Returns (created_teams, created_players, errors). Per-row exceptions
+    are captured into `errors`; only an unexpected error in the loop body
+    itself is re-raised.
+    """
+    created_teams: List[models.Team] = []
+    created_players: List[models.Player] = []
+    errors: List[dict] = []
+    team_cache: Dict[str, models.Team] = {}
+
+    for idx, row in enumerate(rows):
+        try:
+            cells = _normalize_bulk_row(idx, row)
+        except ValueError as exc:
+            errors.append({"row": idx + 1, "reason": str(exc)})
+            continue
+
+        try:
+            # Ensure team exists (or use the one we already queued).
+            team_name = cells["team_name"]
+            if team_name not in team_cache:
+                team = (
+                    db.query(models.Team)
+                    .filter_by(name=team_name, tournament_id=tournament_id)
+                    .first()
+                )
+                if not team:
+                    team = models.Team(
+                        name=team_name,
+                        tournament_id=tournament_id,
+                    )
+                    db.add(team)
+                    db.flush()
+                    if persist:
+                        created_teams.append(team)
+                team_cache[team_name] = team
+            else:
+                team = team_cache[team_name]
+
+            player_number_raw = cells["player_number"]
+            jersey_number = (
+                int(player_number_raw) if player_number_raw.isdigit() else None
+            )
+
+            # Single-space sentinel for unset optional profile fields,
+            # matching the convention used elsewhere in the schema.
+            nationality_value = cells["nationality"] or " "
+            other_value = cells["other"] or " "
+
+            player = models.Player(
+                first_name=cells["player_name"],
+                last_name=cells["player_lastname"],
+                jersey_number=jersey_number,
+                team_id=team.id,
+                gender=cells["gender"],
+                nationality=nationality_value,
+                other=other_value,
+            )
+            db.add(player)
+            db.flush()
+            if persist:
+                created_players.append(player)
+            else:
+                # In preview mode we still want to surface the parsed
+                # values for the UI, but the player has no DB id yet.
+                # Detach so its data survives the rollback.
+                db.expunge(player)
+                created_players.append(player)
+
+        except Exception as exc:
+            errors.append({"row": idx + 1, "reason": str(exc)})
+
+    return created_teams, created_players, errors
+
+
+def _ensure_tournament_or_404(
+    db: Session, tournament_id: int
+) -> models.Tournament:
+    tournament = (
+        db.query(models.Tournament).filter_by(id=tournament_id).first()
+    )
+    if not tournament:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tournament {tournament_id} not found",
+        )
+    return tournament
+
+
+@router.post(
+    "/tournaments/{tournament_id}/bulk-import/preview",
+    response_model=BulkImportPreview,
+)
+def bulk_import_preview(
+    tournament_id: int,
+    payload: BulkImportPayload,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Dry-run a bulk roster import.
+
+    Validates every row, builds proposed teams + players, returns the
+    summary the admin UI needs to render a confirmation table, but does
+    NOT write to the database. Any `db.flush()` side-effects are rolled
+    back at the end.
+    """
+    _ensure_tournament_or_404(db, tournament_id)
+
+    created_teams, created_players, errors = _process_bulk_rows(
+        tournament_id, payload.players, db, persist=False
+    )
+
+    # Rollback any incidental writes from flush() — preview must be a
+    # pure read on the database side.
+    db.rollback()
+
+    proposed_teams = [
+        {"name": t.name, "tournament_id": t.tournament_id}
+        for t in created_teams
+    ]
+    proposed_players = [
+        {
+            "first_name": p.first_name,
+            "last_name": p.last_name,
+            "jersey_number": p.jersey_number,
+            "team_name": next(
+                t.name
+                for t in created_teams
+                if t.id == p.team_id
+            )
+            if any(t.id == p.team_id for t in created_teams)
+            else None,
+            "gender": p.gender,
+            "nationality": p.nationality,
+            "other": p.other,
+        }
+        for p in created_players
+    ]
+
+    return BulkImportPreview(
+        teams_to_create=len(created_teams),
+        players_to_create=len(created_players),
+        proposed_teams=proposed_teams,
+        proposed_players=proposed_players,
+        errors=errors,
+    )
+
+
+@router.post(
+    "/tournaments/{tournament_id}/bulk-import/commit",
+    response_model=BulkImportReport,
+)
+def bulk_import_commit(
+    tournament_id: int,
+    payload: BulkImportPayload,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Persist a bulk roster import.
+
+    Expects the same payload the admin UI used for the preview step. The
+    client is expected to show the preview, let the user confirm, and
+    only then POST here.
+    """
+    _ensure_tournament_or_404(db, tournament_id)
+
+    created_teams, created_players, errors = _process_bulk_rows(
+        tournament_id, payload.players, db, persist=True
+    )
+
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not commit bulk import: {str(exc)}",
+        ) from exc
+
+    all_teams = (
+        db.query(models.Team).filter_by(tournament_id=tournament_id).all()
+    )
+
+    return BulkImportReport(
+        teams_created=len(created_teams),
+        players_created=len(created_players),
+        teams=[schemas.Team.from_orm(t) for t in all_teams],
+        players=[schemas.Player.from_orm(p) for p in created_players],
+        errors=errors,
+    )
+
+
+# Legacy single-shot endpoint. Kept so any client still calling
+# `POST /admin/tournaments/:id/bulk-import` (without /preview or /commit)
+# keeps working until the UI is fully migrated to the two-step flow.
 @router.post(
     "/tournaments/{tournament_id}/bulk-import",
     response_model=BulkImportReport,
@@ -1052,84 +1313,16 @@ def bulk_import_teams_and_players(
     - player number
     - team (team name; created if doesn't exist)
     - gender (optional)
+    - nationality (optional)
     - other (optional)
 
     Returns counts + lists of created teams/players + any errors.
     """
-    tournament = db.query(models.Tournament).filter_by(id=tournament_id).first()
-    if not tournament:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tournament {tournament_id} not found",
-        )
+    _ensure_tournament_or_404(db, tournament_id)
 
-    created_teams = []
-    created_players = []
-    errors = []
-    team_cache: Dict[str, models.Team] = {}
-
-    for idx, row in enumerate(payload.players):
-        try:
-            # Validate row structure
-            if not isinstance(row, dict):
-                errors.append({"row": idx + 1, "reason": "Row is not a dict"})
-                continue
-
-            # Normalize keys (case-insensitive, trim spaces)
-            row_lower = {k.strip().lower(): v for k, v in row.items()}
-
-            player_name = row_lower.get("player name", "").strip()
-            # Accept both "player lastname" and "player last name" as headers.
-            player_lastname = (
-                row_lower.get("player lastname", "").strip()
-                or row_lower.get("player last name", "").strip()
-            )
-            player_number = row_lower.get("player number", "").strip()
-            team_name = row_lower.get("team", "").strip()
-            gender = row_lower.get("gender", "").strip() or None
-            other = row_lower.get("other", "").strip() or None
-
-            if not player_name or not player_lastname or not team_name:
-                errors.append({
-                    "row": idx + 1,
-                    "reason": "Missing required fields (name, lastname, team)",
-                })
-                continue
-
-            # Ensure team exists
-            if team_name not in team_cache:
-                team = db.query(models.Team).filter_by(
-                    name=team_name, tournament_id=tournament_id
-                ).first()
-                if not team:
-                    team = models.Team(
-                        name=team_name,
-                        tournament_id=tournament_id,
-                    )
-                    db.add(team)
-                    db.flush()
-                    created_teams.append(team)
-                team_cache[team_name] = team
-            else:
-                team = team_cache[team_name]
-
-            # Create player
-            player = models.Player(
-                first_name=player_name,
-                last_name=player_lastname,
-                jersey_number=int(player_number) if player_number.isdigit() else None,
-                team_id=team.id,
-                gender=gender,
-            )
-            db.add(player)
-            db.flush()
-            created_players.append(player)
-
-        except Exception as exc:
-            errors.append({
-                "row": idx + 1,
-                "reason": str(exc),
-            })
+    created_teams, created_players, errors = _process_bulk_rows(
+        tournament_id, payload.players, db, persist=True
+    )
 
     try:
         db.commit()
@@ -1140,8 +1333,9 @@ def bulk_import_teams_and_players(
             detail=f"Could not commit bulk import: {str(exc)}",
         ) from exc
 
-    # Fetch all teams for the tournament to return updated list
-    all_teams = db.query(models.Team).filter_by(tournament_id=tournament_id).all()
+    all_teams = (
+        db.query(models.Team).filter_by(tournament_id=tournament_id).all()
+    )
 
     return BulkImportReport(
         teams_created=len(created_teams),

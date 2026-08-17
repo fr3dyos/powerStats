@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 
-import { type Phase } from "@/utils/api-shared";
+import { type Phase, type PhaseType, type PhaseStatus } from "@/utils/api-shared";
 
 type Props = {
   phase: Phase;
@@ -32,7 +32,6 @@ type Props = {
     suggestScheduleFailed: string;
     suggestScheduleSuccess: string;
     suggestScheduleFieldCount: string;
-    advancedTeamsPerGroup: string;
     groupCount: string;
     advancingTeams: string;
     tiebreakers: string;
@@ -72,9 +71,9 @@ export default function PhaseEditor({
     status: phase.status,
     status_mode: phase.status_mode ?? "auto",
     config: {
-      group_count: phase.config?.group_count ?? 2,
-      advancing_teams: phase.config?.advancing_teams ?? 2,
-      tiebreakers: phase.config?.tiebreakers ?? ["head_to_head", "point_diff"],
+      group_count: (phase.config?.group_count as number | undefined) ?? 2,
+      advancing_teams: (phase.config?.advancing_teams as number | undefined) ?? 2,
+      tiebreakers: (phase.config?.tiebreakers as string[] | undefined) ?? ["head_to_head", "point_diff"],
     },
   });
 
@@ -93,9 +92,9 @@ export default function PhaseEditor({
       status: phase.status,
       status_mode: phase.status_mode ?? "auto",
       config: {
-        group_count: phase.config?.group_count ?? 2,
-        advancing_teams: phase.config?.advancing_teams ?? 2,
-        tiebreakers: phase.config?.tiebreakers ?? [
+        group_count: (phase.config?.group_count as number | undefined) ?? 2,
+        advancing_teams: (phase.config?.advancing_teams as number | undefined) ?? 2,
+        tiebreakers: (phase.config?.tiebreakers as string[] | undefined) ?? [
           "head_to_head",
           "point_diff",
         ],
@@ -267,7 +266,7 @@ export default function PhaseEditor({
             <select
               value={draft.phase_type}
               onChange={(e) =>
-                setDraft({ ...draft, phase_type: e.target.value })
+                setDraft({ ...draft, phase_type: e.target.value as PhaseType })
               }
               disabled={saving}
               className="ps-input"
@@ -282,7 +281,7 @@ export default function PhaseEditor({
             </label>
             <select
               value={draft.status}
-              onChange={(e) => setDraft({ ...draft, status: e.target.value })}
+              onChange={(e) => setDraft({ ...draft, status: e.target.value as PhaseStatus })}
               disabled={saving}
               className="ps-input"
             >
@@ -463,14 +462,14 @@ export default function PhaseEditor({
           {phase.config?.group_count ? (
             <>
               {" · "}
-              {labels.groupCount}: <strong>{phase.config.group_count}</strong>
+              {labels.groupCount}: <strong>{phase.config.group_count as number}</strong>
             </>
           ) : null}
           {phase.config?.advancing_teams ? (
             <>
               {" · "}
               {labels.advancingTeams}:{" "}
-              <strong>{phase.config.advancing_teams}</strong>
+              <strong>{phase.config.advancing_teams as number}</strong>
             </>
           ) : null}
         </div>

@@ -219,16 +219,27 @@ class PlayerBase(BaseModel):
     team_id: int
 
 class PlayerCreate(PlayerBase):
-    pass
+    # Optional profile fields populated by the CSV bulk roster import.
+    # `gender` is nullable; `nationality` and `other` default to a single
+    # space so the existing "no value" sentinel convention is preserved.
+    gender: Optional[str] = Field(None, max_length=16)
+    nationality: str = Field(" ", max_length=64)
+    other: str = Field(" ")
 
 class PlayerUpdate(BaseModel):
     first_name: Optional[str] = Field(None, max_length=255)
     last_name: Optional[str] = Field(None, max_length=255)
     jersey_number: Optional[int] = None
     team_id: Optional[int] = None
+    gender: Optional[str] = Field(None, max_length=16)
+    nationality: Optional[str] = Field(None, max_length=64)
+    other: Optional[str] = None
 
 class PlayerInDBBase(PlayerBase):
     id: int
+    gender: Optional[str] = None
+    nationality: str = " "
+    other: str = " "
     created_at: datetime
     updated_at: Optional[datetime] = None
 
