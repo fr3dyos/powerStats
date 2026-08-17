@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
 
 import { CsvButton } from "@/app/_components/CsvButton";
@@ -47,7 +47,41 @@ type BulkImportReport = {
   [k: string]: unknown;
 };
 
-type Stage = "idle" | "previewing" | "previewed" | "committing";
+// Canonical fields the bulk-import recognizes. Each entry is paired with
+// the i18n label key the panel uses to render its dropdown. The order
+// here is the order the user sees in the mapping UI.
+type CanonicalField = {
+  key: string;
+  labelKey:
+    | "nameColumn"
+    | "lastnameColumn"
+    | "numberColumn"
+    | "teamColumn"
+    | "gender"
+    | "nationality"
+    | "other";
+  required: boolean;
+  // Extra canonical aliases the auto-detector should match (besides
+  // the key itself, case-insensitive).
+  aliases?: string[];
+};
+
+const CANONICAL_FIELDS: CanonicalField[] = [
+  { key: "player name", labelKey: "nameColumn", required: true },
+  {
+    key: "player lastname",
+    labelKey: "lastnameColumn",
+    required: true,
+    aliases: ["player last name"],
+  },
+  { key: "player number", labelKey: "numberColumn", required: true },
+  { key: "team", labelKey: "teamColumn", required: true },
+  { key: "gender", labelKey: "gender", required: false },
+  { key: "nationality", labelKey: "nationality", required: false },
+  { key: "other", labelKey: "other", required: false },
+];
+
+type Stage = "idle" | "mapping" | "previewing" | "previewed" | "committing";
 
 type Props = {
   tournamentId: number;
@@ -81,8 +115,39 @@ type Props = {
     nameColumn: string;
     lastnameColumn: string;
     numberColumn: string;
+    mappingTitle: string;
+    mappingHelp: string;
+    noColumn: string;
+    requiredField: string;
   };
 };
+
+/**
+ * Build a best-effort initial column map from a list of CSV headers.
+ * Returns a record keyed by canonical field name, value = the matched
+ * header (case-insensitive). Fields with no match get an empty string,
+ * which the UI surfaces as "(no column)".
+ */
+function autoDetectColumnMap(headers: string[]): Record<string, string> {
+  const lookup = new Map<string, string>();
+  for (const h of headers) {
+    lookup.set(h.toLowerCase().trim(), h);
+  }
+  const out: Record<string, string> = {};
+  for (const field of CANONICAL_FIELDS) {
+    const candidates = [field.key, ...(field.aliases ?? [])];
+    let matched = "";
+    for (const c of candidates) {
+      const hit = lookup.get(c.toLowerCase().trim());
+      if (hit) {
+        matched = hit;
+        break;
+      }
+    }
+    out[field.key] = matched;
+  }
+  return out;
+}
 
 export default function TeamsAndPlayersPanel({
   tournamentId,
@@ -102,9 +167,13 @@ export default function TeamsAndPlayersPanel({
     Array<Player & { team_name: string }>
   >([]);
 
-  // Two-step staging state.
+  // Three-step staging state: idle -> mapping -> previewing -> previewed ->
+  // committing. The user picks the column mapping before the preview call
+  // so the backend can read whatever headers the file actually uses.
   const [stage, setStage] = useState<Stage>("idle");
+  const [headers, setHeaders] = useState<string[]>([]);
   const [parsedRows, setParsedRows] = useState<Record<string, string>[]>([]);
+  const [columnMap, setColumnMap] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<BulkImportPreview | null>(null);
 
   // Fetch roster (players grouped by team) any time the team list changes.
@@ -173,12 +242,19 @@ export default function TeamsAndPlayersPanel({
     }
   };
 
+  const resetImportState = () => {
+    setMessage(null);
+    setPreview(null);
+    setParsedRows([]);
+    setHeaders([]);
+    setColumnMap({});
+    setStage("idle");
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       setFile(e.target.files[0]);
-      setMessage(null);
-      setPreview(null);
-      setStage("idle");
+      resetImportState();
     }
   };
 
@@ -198,20 +274,22 @@ export default function TeamsAndPlayersPanel({
     setDragActive(false);
     if (e.dataTransfer.files?.[0]) {
       setFile(e.dataTransfer.files[0]);
-      setMessage(null);
-      setPreview(null);
-      setStage("idle");
+      resetImportState();
     }
   };
 
   /**
-   * Read the file and validate its headers. Returns the parsed rows or
-   * throws an Error with a human-readable message that the caller can
-   * surface as a `setMessage({ ok: false, ... })`.
+   * Read the file and parse it as CSV with the first row treated as the
+   * header row. Returns the parsed rows + the raw header list.
+   * Throws on parse error or an empty file.
+   *
+   * We intentionally do NOT validate the headers here: in the new flow
+   * the user picks which CSV column maps to each canonical field, so
+   * the column names in the file are free-form.
    */
-  const parseAndValidate = async (
+  const parseFile = async (
     f: File,
-  ): Promise<Record<string, string>[]> => {
+  ): Promise<{ rows: Record<string, string>[]; headers: string[] }> => {
     const text = await f.text();
     let rows: Record<string, string>[] = [];
 
@@ -230,33 +308,68 @@ export default function TeamsAndPlayersPanel({
       throw new Error("No rows found in file");
     }
 
-    // Validate required columns. "player lastname" and "player last name"
-    // are interchangeable; we accept either.
-    const requiredCols = ["player name", "player number", "team"];
-    const lastnameCols = ["player lastname", "player last name"];
-    const headers = Object.keys(rows[0] || {}).map((h) =>
-      h.toLowerCase().trim(),
-    );
-    const missing = requiredCols.filter((col) => !headers.includes(col));
-    const hasLastname = lastnameCols.some((col) => headers.includes(col));
-    if (missing.length > 0) {
-      throw new Error(`Missing required columns: ${missing.join(", ")}`);
+    // Papa.parse lowercases nothing for us, so we read headers off the
+    // first row's keys verbatim, trimmed.
+    const rawHeaders = Object.keys(rows[0] || {})
+      .map((h) => h.trim())
+      .filter((h) => h.length > 0);
+
+    if (rawHeaders.length === 0) {
+      throw new Error("File has no header row");
     }
-    if (!hasLastname) {
-      throw new Error(
-        `Missing required column: "player lastname" or "player last name"`,
-      );
-    }
-    return rows;
+
+    return { rows, headers: rawHeaders };
   };
 
   /**
-   * Step 1: parse the CSV locally and call /preview. Render the proposed
-   * teams + players for the user to inspect before any DB writes happen.
+   * Step 1: parse the file and present the column-mapping UI. After
+   * auto-detection the user can override any dropdown before clicking
+   * "Preview import".
    */
-  const handlePreviewImport = async () => {
+  const handleOpenMapping = async () => {
     if (!file) {
       setMessage({ ok: false, text: "Please select a file" });
+      return;
+    }
+
+    setBusy(true);
+    setMessage(null);
+
+    try {
+      const { rows, headers: fileHeaders } = await parseFile(file);
+      setParsedRows(rows);
+      setHeaders(fileHeaders);
+      setColumnMap(autoDetectColumnMap(fileHeaders));
+      setStage("mapping");
+    } catch (err) {
+      setMessage({
+        ok: false,
+        text: err instanceof Error ? err.message : "Parse failed",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Required fields the user must map before continuing to preview.
+  const missingRequired = useMemo(() => {
+    return CANONICAL_FIELDS.filter(
+      (f) => f.required && !columnMap[f.key],
+    ).map((f) => f.key);
+  }, [columnMap]);
+
+  /**
+   * Step 2: send the parsed rows + the user-supplied column map to the
+   * /preview endpoint. The backend normalizes each row using the map.
+   */
+  const handlePreviewImport = async () => {
+    if (!file || stage !== "mapping") return;
+
+    if (missingRequired.length > 0) {
+      setMessage({
+        ok: false,
+        text: `Map the required columns: ${missingRequired.join(", ")}`,
+      });
       return;
     }
 
@@ -266,15 +379,12 @@ export default function TeamsAndPlayersPanel({
     setPreview(null);
 
     try {
-      const rows = await parseAndValidate(file);
-      setParsedRows(rows);
-
       const res = await fetch(
         `/api/admin/tournaments/${tournamentId}/bulk-import/preview`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ players: rows }),
+          body: JSON.stringify({ players: parsedRows, column_map: columnMap }),
         },
       );
 
@@ -287,7 +397,8 @@ export default function TeamsAndPlayersPanel({
       setPreview(previewData);
       setStage("previewed");
     } catch (err) {
-      setStage("idle");
+      // Stay in mapping so the user can adjust columns without re-uploading.
+      setStage("mapping");
       setMessage({
         ok: false,
         text: err instanceof Error ? err.message : "Preview failed",
@@ -298,8 +409,8 @@ export default function TeamsAndPlayersPanel({
   };
 
   /**
-   * Step 2: persist the same rows the user just previewed. The backend
-   * returns the updated teams list so we can sync the parent component.
+   * Step 3: persist the same rows + column map the user just previewed.
+   * The backend returns the updated teams list so we can sync the parent.
    */
   const handleConfirmImport = async () => {
     if (!preview || stage !== "previewed") return;
@@ -314,7 +425,7 @@ export default function TeamsAndPlayersPanel({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ players: parsedRows }),
+          body: JSON.stringify({ players: parsedRows, column_map: columnMap }),
         },
       );
 
@@ -338,6 +449,8 @@ export default function TeamsAndPlayersPanel({
       setStage("idle");
       setPreview(null);
       setParsedRows([]);
+      setHeaders([]);
+      setColumnMap({});
       setFile(null);
     } catch (err) {
       // Stay in previewed state so the user can retry without re-uploading.
@@ -357,6 +470,12 @@ export default function TeamsAndPlayersPanel({
     setMessage(null);
   };
 
+  const handleBackToMapping = () => {
+    setStage("mapping");
+    setPreview(null);
+    setMessage(null);
+  };
+
   // Convenience: render a `—` for the three optional profile fields when
   // they're either absent or just the single-space default sentinel.
   const displayValue = (v: string | null | undefined) => {
@@ -364,6 +483,61 @@ export default function TeamsAndPlayersPanel({
     const trimmed = v.trim();
     if (trimmed.length === 0) return "—";
     return v;
+  };
+
+  // Render one dropdown for a canonical field.
+  const renderMappingRow = (field: CanonicalField) => {
+    const labelText = labels[field.labelKey];
+    return (
+      <div
+        key={field.key}
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 8,
+          alignItems: "center",
+          padding: "8px 0",
+          borderBottom: "1px solid var(--ps-border)",
+        }}
+      >
+        <label
+          htmlFor={`map-${field.key}`}
+          style={{
+            fontSize: 13,
+            fontWeight: field.required ? 600 : 400,
+          }}
+        >
+          {labelText}
+          {field.required ? (
+            <span
+              aria-label={labels.requiredField}
+              style={{ color: "#F44336", marginLeft: 4 }}
+            >
+              *
+            </span>
+          ) : null}
+        </label>
+        <select
+          id={`map-${field.key}`}
+          className="ps-input"
+          value={columnMap[field.key] ?? ""}
+          onChange={(e) =>
+            setColumnMap((prev) => ({
+              ...prev,
+              [field.key]: e.target.value,
+            }))
+          }
+          disabled={busy}
+        >
+          <option value="">{labels.noColumn}</option>
+          {headers.map((h) => (
+            <option key={h} value={h}>
+              {h}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
   };
 
   return (
@@ -500,16 +674,16 @@ export default function TeamsAndPlayersPanel({
           </div>
         )}
 
-        {/* Stage 1 controls (idle): preview button */}
-        {stage === "idle" || stage === "previewing" ? (
+        {/* Stage 1: idle. Show "Map columns" button. */}
+        {stage === "idle" ? (
           <div style={{ display: "flex", gap: 8 }}>
             <button
               type="button"
               className="ps-btn ps-btn--primary"
-              onClick={handlePreviewImport}
+              onClick={handleOpenMapping}
               disabled={busy || !file}
             >
-              {stage === "previewing" ? labels.loading : labels.previewImport}
+              {labels.mappingTitle}
             </button>
             {file && (
               <button
@@ -517,9 +691,7 @@ export default function TeamsAndPlayersPanel({
                 className="ps-btn ps-btn--ghost"
                 onClick={() => {
                   setFile(null);
-                  setMessage(null);
-                  setPreview(null);
-                  setStage("idle");
+                  resetImportState();
                 }}
                 disabled={busy}
               >
@@ -529,7 +701,55 @@ export default function TeamsAndPlayersPanel({
           </div>
         ) : null}
 
-        {/* Stage 2: preview table + confirm */}
+        {/* Stage 2: column mapping. Show dropdowns + preview button. */}
+        {stage === "mapping" || stage === "previewing" ? (
+          <div
+            style={{
+              border: "1px solid var(--ps-border)",
+              borderRadius: 6,
+              padding: 12,
+              marginBottom: 16,
+              background: "var(--ps-surface-container-low)",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 13,
+                color: "var(--ps-text-muted)",
+                marginBottom: 8,
+              }}
+            >
+              {labels.mappingHelp}
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              {CANONICAL_FIELDS.map(renderMappingRow)}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                className="ps-btn ps-btn--primary"
+                onClick={handlePreviewImport}
+                disabled={
+                  busy ||
+                  stage === "previewing" ||
+                  missingRequired.length > 0
+                }
+              >
+                {stage === "previewing" ? labels.loading : labels.previewImport}
+              </button>
+              <button
+                type="button"
+                className="ps-btn ps-btn--ghost"
+                onClick={handleBackToIdle}
+                disabled={busy}
+              >
+                {labels.cancel}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Stage 3: preview table + confirm button. */}
         {stage === "previewed" && preview ? (
           <div
             style={{
@@ -633,7 +853,7 @@ export default function TeamsAndPlayersPanel({
               <button
                 type="button"
                 className="ps-btn ps-btn--ghost"
-                onClick={handleBackToIdle}
+                onClick={handleBackToMapping}
                 disabled={busy}
               >
                 {labels.backToIdle}
@@ -642,7 +862,7 @@ export default function TeamsAndPlayersPanel({
           </div>
         ) : null}
 
-        {/* Stage 2 committing indicator */}
+        {/* Stage 4: committing indicator. */}
         {stage === "committing" ? (
           <div style={{ fontSize: 13, color: "var(--ps-text-muted)" }}>
             {labels.loading}…

@@ -43,17 +43,25 @@ GitHub: [@fr3dyos](https://github.com/fr3dyos)
 
 #### CSV Roster Import
 
-Tournament roster can be bulk-imported from a CSV with six columns. Open
-`/admin/tournaments/<id>/edit`, drop the CSV in the **Import roster** card,
-and walk through the two-step staging flow before any rows are written to
-the database.
+Tournament roster can be bulk-imported from a CSV with up to seven
+columns. Open `/admin/tournaments/<id>/edit`, drop the CSV in the
+**Import roster** card, and walk through the three-step staging flow
+before any rows are written to the database.
 
-**Columns:**
+**Column mapping**
 
-| Column | Required | Example | Notes |
+The CSV header names are not fixed — the panel **detects them
+case-insensitively** and then lets the admin override the mapping via
+dropdowns. So a file with `Name`, `Surname`, `Jersey`, `Team`, `Gender`,
+`Country`, `Notes` is just as valid as one with the canonical names.
+
+**Fields** (any reasonable header is accepted; the panel auto-matches
+these names):
+
+| Logical field | Required | Example | Notes |
 |---|---|---|---|
 | `player name` | yes | `Ana` | first name |
-| `player lastname` (or `player last name`) | yes | `Silva` | both spellings accepted |
+| `player lastname` | yes | `Silva` | `player last name` is also accepted |
 | `player number` | yes | `7` | jersey number, integer |
 | `team` | yes | `Poeira` | team name; created if it does not exist |
 | `gender` | no | `F` | free-form, e.g. `M`, `F`, `mixed`, `open` |
@@ -62,17 +70,19 @@ the database.
 
 **Flow:**
 
-1. Drop the CSV. Client-side parser checks headers — missing required
-   columns raise an inline error before any network call.
-2. Click **Preview import**. The browser calls
-   `POST /api/admin/tournaments/<id>/bulk-import/preview`, which forwards
-   to FastAPI's dry-run endpoint. The preview returns the teams +
-   players that would be created, plus any per-row validation errors,
-   without writing anything.
-3. Inspect the proposed table — counts of teams to create, players to
+1. Drop the CSV. The client parses the file and reads the header row.
+2. The **Map columns** card shows one dropdown per logical field —
+   each lists every column in the file. Pre-filled by best-effort
+   auto-detection (case-insensitive). Required fields are marked with
+   `*`. Hit **Preview import** once each required field is mapped.
+3. The browser calls `POST /api/admin/tournaments/<id>/bulk-import/preview`
+   with the parsed rows and the chosen `column_map`. FastAPI dry-runs
+   the import and returns the teams + players that would be created,
+   plus any per-row validation errors, without writing anything.
+4. Inspect the proposed table — counts of teams to create, players to
    create, rows with errors. Click **Confirm import** to call
    `POST /api/admin/tournaments/<id>/bulk-import/commit`, which finally
-   persists the rows. Or click **Back** to start over with a new file.
+   persists the rows. Or click **Back** to adjust the column mapping.
 
 The `other` column is intentionally free-form so admins can record
 handedness, dietary notes, or anything else without a schema change.

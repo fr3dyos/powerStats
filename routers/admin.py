@@ -1022,8 +1022,35 @@ class BulkPlayerImportRow(BaseModel):
 
 
 class BulkImportPayload(BaseModel):
-    """Bulk player import request."""
+    """Bulk player import request.
+
+    `players` is the raw list of dicts as parsed from the CSV. Headers in
+    each row are NOT assumed to match any canonical name; instead the
+    admin UI supplies a `column_map` whose keys are the canonical field
+    names (`"player name"`, `"player lastname"`, etc.) and values are the
+    actual CSV header for that field in this particular file.
+
+    `column_map` is optional for backward compatibility: when omitted,
+    the row normalizer falls back to the canonical-name lookup (case
+    insensitive, trimmed).
+    """
     players: List[dict]
+    column_map: Optional[Dict[str, str]] = None
+
+
+# Canonical field names recognized by the bulk-import row normalizer.
+# These match the keys we expect in `BulkPlayerImportRow` and the column
+# labels surfaced in the admin UI's mapping step.
+BULK_IMPORT_CANONICAL_FIELDS = (
+    "player name",
+    "player lastname",
+    "player last name",
+    "player number",
+    "team",
+    "gender",
+    "nationality",
+    "other",
+)
 
 
 class BulkImportReport(BaseModel):
@@ -1049,29 +1076,65 @@ class BulkImportPreview(BaseModel):
     errors: List[dict] = []
 
 
-def _normalize_bulk_row(idx: int, row: dict) -> Dict[str, Optional[str]]:
+def _normalize_bulk_row(
+    idx: int,
+    row: dict,
+    column_map: Optional[Dict[str, str]] = None,
+) -> Dict[str, Optional[str]]:
     """Extract the normalized cell values from one CSV row.
 
     Returns a dict with all six known fields (lastname, team, etc.). Throws
     ValueError for rows that are structurally invalid or missing required
     fields, so the caller can record a clean `{row, reason}` error.
+
+    The optional `column_map` lets the caller override which CSV column
+    supplies each canonical field. Keys are canonical field names
+    (e.g. "player name", "team"), values are the actual CSV header for
+    that field in this file. When `column_map` is None or doesn't name a
+    given canonical field, the helper falls back to case-insensitive
+    lookup against the canonical name.
     """
     if not isinstance(row, dict):
         raise ValueError("Row is not a dict")
 
-    row_lower = {k.strip().lower(): v for k, v in row.items()}
+    row_lower = {str(k).strip().lower(): v for k, v in row.items()}
 
-    player_name = str(row_lower.get("player name", "")).strip()
-    # Accept both "player lastname" and "player last name" as headers.
-    player_lastname = (
-        str(row_lower.get("player lastname", "")).strip()
-        or str(row_lower.get("player last name", "")).strip()
-    )
-    player_number = str(row_lower.get("player number", "")).strip()
-    team_name = str(row_lower.get("team", "")).strip()
-    gender = str(row_lower.get("gender", "")).strip() or None
-    nationality = str(row_lower.get("nationality", "")).strip() or None
-    other = str(row_lower.get("other", "")).strip() or None
+    def cell(canonical: str) -> str:
+        """Read one cell, honoring the column_map when present.
+
+        For the player lastname canonical name we accept either
+        "player lastname" or "player last name" as the map key, so the
+        admin UI can map either header.
+        """
+        candidates: List[str] = []
+        if column_map:
+            mapped = column_map.get(canonical)
+            if mapped:
+                candidates.append(mapped)
+            # Special case: "player lastname" and "player last name" are
+            # interchangeable aliases.
+            if canonical == "player lastname":
+                mapped_alt = column_map.get("player last name")
+                if mapped_alt:
+                    candidates.append(mapped_alt)
+        # Fallback: case-insensitive canonical name lookup.
+        candidates.append(canonical)
+        if canonical == "player lastname":
+            candidates.append("player last name")
+
+        for header in candidates:
+            value = row_lower.get(str(header).strip().lower())
+            if value is not None:
+                return str(value).strip()
+        return ""
+
+    player_name = cell("player name")
+    player_lastname = cell("player lastname")
+    player_number = cell("player number")
+    team_name = cell("team")
+    gender = cell("gender") or None
+    nationality = cell("nationality") or None
+    other = cell("other") or None
 
     if not player_name or not player_lastname or not team_name:
         raise ValueError("Missing required fields (name, lastname, team)")
@@ -1093,6 +1156,7 @@ def _process_bulk_rows(
     db: Session,
     *,
     persist: bool,
+    column_map: Optional[Dict[str, str]] = None,
 ) -> Tuple[List[models.Team], List[models.Player], List[dict]]:
     """Shared core for the bulk-import preview + commit endpoints.
 
@@ -1100,6 +1164,11 @@ def _process_bulk_rows(
     session and the caller is expected to commit. When `persist=False`
     we still `flush()` so we can read auto-generated IDs, but nothing is
     persisted: the caller is expected to rollback.
+
+    `column_map` (optional) maps canonical field names to the actual
+    CSV header for that field in the supplied file. When omitted, the
+    row normalizer falls back to case-insensitive lookup against the
+    canonical names.
 
     Returns (created_teams, created_players, errors). Per-row exceptions
     are captured into `errors`; only an unexpected error in the loop body
@@ -1112,7 +1181,7 @@ def _process_bulk_rows(
 
     for idx, row in enumerate(rows):
         try:
-            cells = _normalize_bulk_row(idx, row)
+            cells = _normalize_bulk_row(idx, row, column_map=column_map)
         except ValueError as exc:
             errors.append({"row": idx + 1, "reason": str(exc)})
             continue
@@ -1209,7 +1278,11 @@ def bulk_import_preview(
     _ensure_tournament_or_404(db, tournament_id)
 
     created_teams, created_players, errors = _process_bulk_rows(
-        tournament_id, payload.players, db, persist=False
+        tournament_id,
+        payload.players,
+        db,
+        persist=False,
+        column_map=payload.column_map,
     )
 
     # Rollback any incidental writes from flush() — preview must be a
@@ -1267,7 +1340,11 @@ def bulk_import_commit(
     _ensure_tournament_or_404(db, tournament_id)
 
     created_teams, created_players, errors = _process_bulk_rows(
-        tournament_id, payload.players, db, persist=True
+        tournament_id,
+        payload.players,
+        db,
+        persist=True,
+        column_map=payload.column_map,
     )
 
     try:
@@ -1321,7 +1398,11 @@ def bulk_import_teams_and_players(
     _ensure_tournament_or_404(db, tournament_id)
 
     created_teams, created_players, errors = _process_bulk_rows(
-        tournament_id, payload.players, db, persist=True
+        tournament_id,
+        payload.players,
+        db,
+        persist=True,
+        column_map=payload.column_map,
     )
 
     try:

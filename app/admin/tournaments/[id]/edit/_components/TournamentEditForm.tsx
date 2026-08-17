@@ -68,6 +68,10 @@ type Props = {
     nameColumn: string;
     lastnameColumn: string;
     numberColumn: string;
+    mappingTitle: string;
+    mappingHelp: string;
+    noColumn: string;
+    requiredField: string;
   };
   canEdit: boolean;
 };
@@ -336,6 +340,10 @@ export function TournamentEditForm({
           nameColumn: labels.nameColumn,
           lastnameColumn: labels.lastnameColumn,
           numberColumn: labels.numberColumn,
+          mappingTitle: labels.mappingTitle,
+          mappingHelp: labels.mappingHelp,
+          noColumn: labels.noColumn,
+          requiredField: labels.requiredField,
         }}
       />
 
