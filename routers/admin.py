@@ -1033,9 +1033,17 @@ class BulkImportPayload(BaseModel):
     `column_map` is optional for backward compatibility: when omitted,
     the row normalizer falls back to the canonical-name lookup (case
     insensitive, trimmed).
+
+    `edited_players` is the EDITED preview the admin UI produced after
+    the user reviewed the proposed rows. When supplied, the backend
+    treats each entry as the canonical record (same shape as
+    `BulkImportPreview.proposed_players[i]`) and skips the
+    column-normalize step. This is what makes the user's edits in the
+    preview UI authoritative.
     """
     players: List[dict]
     column_map: Optional[Dict[str, str]] = None
+    edited_players: Optional[List[dict]] = None
 
 
 # Canonical field names recognized by the bulk-import row normalizer.
@@ -1068,10 +1076,14 @@ class BulkImportPreview(BaseModel):
     `proposed_teams` and `proposed_players` carry just enough fields for the
     admin UI to render a confirmation table (name + jersey + profile
     columns). No DB IDs are populated because nothing is persisted.
+
+    `existing_teams` lists teams already in the tournament so the UI's
+    team picker can be exhaustive without a second round-trip.
     """
     teams_to_create: int = 0
     players_to_create: int = 0
     proposed_teams: List[dict] = []
+    existing_teams: List[dict] = []
     proposed_players: List[dict] = []
     errors: List[dict] = []
 
@@ -1157,6 +1169,7 @@ def _process_bulk_rows(
     *,
     persist: bool,
     column_map: Optional[Dict[str, str]] = None,
+    edited_players: Optional[List[dict]] = None,
 ) -> Tuple[List[models.Team], List[models.Player], List[dict]]:
     """Shared core for the bulk-import preview + commit endpoints.
 
@@ -1166,9 +1179,18 @@ def _process_bulk_rows(
     persisted: the caller is expected to rollback.
 
     `column_map` (optional) maps canonical field names to the actual
-    CSV header for that field in the supplied file. When omitted, the
+    CSV header for each field in the supplied file. When omitted, the
     row normalizer falls back to case-insensitive lookup against the
     canonical names.
+
+    `edited_players` (optional) is the EDITED preview produced by the
+    admin UI after the user has reviewed + corrected the rows. When
+    supplied, each entry is treated as the canonical record and the
+    column-normalize step is skipped — the user's edits are
+    authoritative. Entries are expected to share the shape of
+    `BulkImportPreview.proposed_players[i]`:
+        first_name, last_name, jersey_number, team_name,
+        gender, nationality, other.
 
     Returns (created_teams, created_players, errors). Per-row exceptions
     are captured into `errors`; only an unexpected error in the loop body
@@ -1178,6 +1200,97 @@ def _process_bulk_rows(
     created_players: List[models.Player] = []
     errors: List[dict] = []
     team_cache: Dict[str, models.Team] = {}
+
+    # When `edited_players` is supplied, it takes precedence over the
+    # raw CSV rows: the admin has already reviewed and corrected them.
+    source_row_labels: List[Dict[str, str]] = []
+    if edited_players is not None:
+        for idx, edited in enumerate(edited_players):
+            if not isinstance(edited, dict):
+                errors.append({
+                    "row": idx + 1,
+                    "reason": "Edited row is not an object",
+                })
+                continue
+
+            first_name = str(edited.get("first_name") or "").strip()
+            last_name = str(edited.get("last_name") or "").strip()
+            team_name = str(edited.get("team_name") or "").strip()
+
+            if not first_name or not last_name or not team_name:
+                errors.append({
+                    "row": idx + 1,
+                    "reason": "Missing required fields (name, lastname, team)",
+                })
+                continue
+
+            jersey_raw = edited.get("jersey_number", None)
+            if jersey_raw in (None, ""):
+                jersey_number: Optional[int] = None
+            else:
+                try:
+                    jersey_number = int(jersey_raw)
+                except (TypeError, ValueError):
+                    errors.append({
+                        "row": idx + 1,
+                        "reason": f"Invalid jersey number: {jersey_raw!r}",
+                    })
+                    continue
+
+            # Single-space sentinel for unset optional profile fields,
+            # matching the convention used elsewhere in the schema.
+            nationality_value = str(edited.get("nationality") or "").strip() or " "
+            other_value = str(edited.get("other") or "").strip() or " "
+            gender_value = (
+                str(edited.get("gender")).strip()
+                if edited.get("gender") is not None
+                else None
+            )
+
+            try:
+                if team_name not in team_cache:
+                    team = (
+                        db.query(models.Team)
+                        .filter_by(name=team_name, tournament_id=tournament_id)
+                        .first()
+                    )
+                    if not team:
+                        team = models.Team(
+                            name=team_name,
+                            tournament_id=tournament_id,
+                        )
+                        db.add(team)
+                        db.flush()
+                        if persist:
+                            created_teams.append(team)
+                    team_cache[team_name] = team
+                else:
+                    team = team_cache[team_name]
+
+                player = models.Player(
+                    first_name=first_name,
+                    last_name=last_name,
+                    jersey_number=jersey_number,
+                    team_id=team.id,
+                    gender=gender_value or None,
+                    nationality=nationality_value,
+                    other=other_value,
+                )
+                db.add(player)
+                db.flush()
+                if persist:
+                    created_players.append(player)
+                else:
+                    # In preview mode we still want to surface the
+                    # parsed values for the UI, but the player has no
+                    # DB id yet. Detach so its data survives the
+                    # rollback.
+                    db.expunge(player)
+                    created_players.append(player)
+            except Exception as exc:
+                errors.append({"row": idx + 1, "reason": str(exc)})
+
+        return created_teams, created_players, errors
 
     for idx, row in enumerate(rows):
         try:
@@ -1289,6 +1402,18 @@ def bulk_import_preview(
     # pure read on the database side.
     db.rollback()
 
+    # Snapshot the team's existing teams so the UI picker can be
+    # exhaustive without a second round-trip. The CSV's proposed
+    # teams and the existing teams are returned separately; the
+    # admin UI combines them in the dropdown.
+    existing_team_rows = (
+        db.query(models.Team).filter_by(tournament_id=tournament_id).all()
+    )
+    existing_teams = [
+        {"id": t.id, "name": t.name, "tournament_id": t.tournament_id}
+        for t in existing_team_rows
+    ]
+
     proposed_teams = [
         {"name": t.name, "tournament_id": t.tournament_id}
         for t in created_teams
@@ -1316,6 +1441,7 @@ def bulk_import_preview(
         teams_to_create=len(created_teams),
         players_to_create=len(created_players),
         proposed_teams=proposed_teams,
+        existing_teams=existing_teams,
         proposed_players=proposed_players,
         errors=errors,
     )
@@ -1345,6 +1471,7 @@ def bulk_import_commit(
         db,
         persist=True,
         column_map=payload.column_map,
+        edited_players=payload.edited_players,
     )
 
     try:
@@ -1403,6 +1530,7 @@ def bulk_import_teams_and_players(
         db,
         persist=True,
         column_map=payload.column_map,
+        edited_players=payload.edited_players,
     )
 
     try:

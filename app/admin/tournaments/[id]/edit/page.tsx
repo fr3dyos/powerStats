@@ -149,6 +149,9 @@ export default async function EditTournamentPage({
             mappingHelp: at.mappingHelp,
             noColumn: at.noColumn,
             requiredField: at.requiredField,
+            removeRow: at.removeRow,
+            newTeam: at.newTeam,
+            rowInvalid: at.rowInvalid,
           }}
           canEdit={role === "admin"}
         />

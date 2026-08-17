@@ -72,6 +72,9 @@ type Props = {
     mappingHelp: string;
     noColumn: string;
     requiredField: string;
+    removeRow: string;
+    newTeam: string;
+    rowInvalid: string;
   };
   canEdit: boolean;
 };
@@ -344,6 +347,9 @@ export function TournamentEditForm({
           mappingHelp: labels.mappingHelp,
           noColumn: labels.noColumn,
           requiredField: labels.requiredField,
+          removeRow: labels.removeRow,
+          newTeam: labels.newTeam,
+          rowInvalid: labels.rowInvalid,
         }}
       />
 

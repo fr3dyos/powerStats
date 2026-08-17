@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+// `crypto.randomUUID` is available in all modern browsers + Node 19+; we
+// fall back to a Math.random-based id for older runtimes (tests, SSR).
 import Papa from "papaparse";
 
 import { CsvButton } from "@/app/_components/CsvButton";
@@ -26,6 +28,11 @@ type BulkImportPreview = {
   teams_to_create?: number;
   players_to_create?: number;
   proposed_teams?: Array<{ name: string; tournament_id: number }>;
+  existing_teams?: Array<{
+    id: number;
+    name: string;
+    tournament_id: number;
+  }>;
   proposed_players?: Array<{
     first_name: string;
     last_name: string;
@@ -36,6 +43,27 @@ type BulkImportPreview = {
     other?: string | null;
   }>;
   errors?: Array<{ row: number; reason: string }>;
+};
+
+/**
+ * One editable row in the preview table. Mirrors the shape of
+ * `proposed_players[i]` so the panel can re-send it to the backend as
+ * `edited_players`. The `rowId` is a stable React key generated
+ * client-side; the backend ignores it.
+ */
+type EditablePlayer = {
+  rowId: string;
+  first_name: string;
+  last_name: string;
+  jersey_number: number | null;
+  team_name: string;
+  gender: string;
+  nationality: string;
+  other: string;
+  // Sentinel: when true, the team cell is rendering the free-text
+  // input instead of the picker. Lets us keep the user's cursor
+  // position when they switch modes.
+  teamIsNew: boolean;
 };
 
 type BulkImportReport = {
@@ -119,6 +147,9 @@ type Props = {
     mappingHelp: string;
     noColumn: string;
     requiredField: string;
+    removeRow: string;
+    newTeam: string;
+    rowInvalid: string;
   };
 };
 
@@ -175,6 +206,57 @@ export default function TeamsAndPlayersPanel({
   const [parsedRows, setParsedRows] = useState<Record<string, string>[]>([]);
   const [columnMap, setColumnMap] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<BulkImportPreview | null>(null);
+  // Editable mirror of preview.proposed_players. Populated when /preview
+  // returns so the user can fix typos (especially team) before commit.
+  // The stable rowId lets React keys survive row removals without index
+  // collisions.
+  const [editablePlayers, setEditablePlayers] = useState<EditablePlayer[]>([]);
+
+  // Build the team-picker option list: existing tournament teams +
+  // teams the CSV proposed to create (de-duplicated by name).
+  const teamOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ name: string; source: "existing" | "proposed" }> = [];
+    for (const t of preview?.existing_teams ?? []) {
+      const k = t.name.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ name: t.name, source: "existing" });
+    }
+    for (const t of preview?.proposed_teams ?? []) {
+      const k = t.name.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ name: t.name, source: "proposed" });
+    }
+    return out;
+  }, [preview]);
+
+  // Pre-compute which rowIds are invalid so the Confirm button can be
+  // disabled without scanning the array on every render.
+  const invalidRowIds = useMemo(() => {
+    const out = new Set<string>();
+    for (const row of editablePlayers) {
+      if (!row.first_name.trim() || !row.last_name.trim() || !row.team_name.trim()) {
+        out.add(row.rowId);
+      }
+    }
+    return out;
+  }, [editablePlayers]);
+
+  // Mutators for editable rows. Each takes the rowId and a partial patch.
+  const updateEditablePlayer = (
+    rowId: string,
+    patch: Partial<EditablePlayer>,
+  ) => {
+    setEditablePlayers((prev) =>
+      prev.map((row) => (row.rowId === rowId ? { ...row, ...patch } : row)),
+    );
+  };
+
+  const removeEditablePlayer = (rowId: string) => {
+    setEditablePlayers((prev) => prev.filter((row) => row.rowId !== rowId));
+  };
 
   // Fetch roster (players grouped by team) any time the team list changes.
   useEffect(() => {
@@ -248,6 +330,7 @@ export default function TeamsAndPlayersPanel({
     setParsedRows([]);
     setHeaders([]);
     setColumnMap({});
+    setEditablePlayers([]);
     setStage("idle");
   };
 
@@ -395,6 +478,27 @@ export default function TeamsAndPlayersPanel({
 
       const previewData: BulkImportPreview = await res.json();
       setPreview(previewData);
+      // Seed the editable rows from the proposed players. Each row gets
+      // a stable rowId so React keys stay unique even after removals.
+      const seeded: EditablePlayer[] = (previewData.proposed_players ?? []).map(
+        (p) => ({
+          rowId:
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `row-${Math.random().toString(36).slice(2, 10)}`,
+          first_name: p.first_name ?? "",
+          last_name: p.last_name ?? "",
+          jersey_number: p.jersey_number ?? null,
+          team_name: p.team_name ?? "",
+          gender: p.gender ?? "",
+          nationality: p.nationality ?? "",
+          other: p.other ?? "",
+          // Start in picker mode; the user can switch to free-text by
+          // selecting the "(new team…)" option.
+          teamIsNew: false,
+        }),
+      );
+      setEditablePlayers(seeded);
       setStage("previewed");
     } catch (err) {
       // Stay in mapping so the user can adjust columns without re-uploading.
@@ -425,7 +529,22 @@ export default function TeamsAndPlayersPanel({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ players: parsedRows, column_map: columnMap }),
+          body: JSON.stringify({
+            players: parsedRows,
+            column_map: columnMap,
+            // Authoritative: any cell edits the admin made in the
+            // preview override the raw CSV values. The backend uses
+            // this branch and skips the column-normalize step.
+            edited_players: editablePlayers.map((row) => ({
+              first_name: row.first_name,
+              last_name: row.last_name,
+              jersey_number: row.jersey_number,
+              team_name: row.team_name,
+              gender: row.gender,
+              nationality: row.nationality,
+              other: row.other,
+            })),
+          }),
         },
       );
 
@@ -448,6 +567,7 @@ export default function TeamsAndPlayersPanel({
       // the preview lingering.
       setStage("idle");
       setPreview(null);
+      setEditablePlayers([]);
       setParsedRows([]);
       setHeaders([]);
       setColumnMap({});
@@ -467,22 +587,15 @@ export default function TeamsAndPlayersPanel({
   const handleBackToIdle = () => {
     setStage("idle");
     setPreview(null);
+    setEditablePlayers([]);
     setMessage(null);
   };
 
   const handleBackToMapping = () => {
     setStage("mapping");
     setPreview(null);
+    setEditablePlayers([]);
     setMessage(null);
-  };
-
-  // Convenience: render a `—` for the three optional profile fields when
-  // they're either absent or just the single-space default sentinel.
-  const displayValue = (v: string | null | undefined) => {
-    if (v == null) return "—";
-    const trimmed = v.trim();
-    if (trimmed.length === 0) return "—";
-    return v;
   };
 
   // Render one dropdown for a canonical field.
@@ -809,8 +922,7 @@ export default function TeamsAndPlayersPanel({
               </details>
             ) : null}
 
-            {preview.proposed_players &&
-            preview.proposed_players.length > 0 ? (
+            {editablePlayers.length > 0 ? (
               <div style={{ overflowX: "auto", marginBottom: 12 }}>
                 <table className="ps-table" style={{ fontSize: 12 }}>
                   <thead>
@@ -822,22 +934,178 @@ export default function TeamsAndPlayersPanel({
                       <th>{labels.gender}</th>
                       <th>{labels.nationality}</th>
                       <th>{labels.other}</th>
+                      <th aria-label={labels.removeRow} />
                     </tr>
                   </thead>
                   <tbody>
-                    {preview.proposed_players.map((p, i) => (
-                      <tr key={i}>
-                        <td>{p.team_name ?? "—"}</td>
-                        <td>{p.first_name}</td>
-                        <td>{p.last_name}</td>
-                        <td>{p.jersey_number ?? "—"}</td>
-                        <td>{displayValue(p.gender)}</td>
-                        <td>{displayValue(p.nationality)}</td>
-                        <td>{displayValue(p.other)}</td>
-                      </tr>
-                    ))}
+                    {editablePlayers.map((row) => {
+                      const invalid = invalidRowIds.has(row.rowId);
+                      const rowHighlight = invalid
+                        ? "rgba(244, 67, 54, 0.06)"
+                        : "transparent";
+                      return (
+                        <tr key={row.rowId} style={{ background: rowHighlight }}>
+                          <td>
+                            {row.teamIsNew ? (
+                              <input
+                                type="text"
+                                className="ps-input"
+                                style={{ minWidth: 120, fontSize: 12 }}
+                                value={row.team_name}
+                                placeholder={labels.newTeam}
+                                onChange={(e) =>
+                                  updateEditablePlayer(row.rowId, {
+                                    team_name: e.target.value,
+                                  })
+                                }
+                              />
+                            ) : (
+                              <select
+                                className="ps-input"
+                                style={{ minWidth: 120, fontSize: 12 }}
+                                value={row.team_name}
+                                onChange={(e) => {
+                                  const next = e.target.value;
+                                  if (next === "__new_team__") {
+                                    updateEditablePlayer(row.rowId, {
+                                      teamIsNew: true,
+                                      team_name: "",
+                                    });
+                                  } else {
+                                    updateEditablePlayer(row.rowId, {
+                                      team_name: next,
+                                      teamIsNew: false,
+                                    });
+                                  }
+                                }}
+                              >
+                                <option value="" disabled>
+                                  {labels.teamColumn}
+                                </option>
+                                {teamOptions.map((opt) => (
+                                  <option key={opt.name} value={opt.name}>
+                                    {opt.name}
+                                  </option>
+                                ))}
+                                <option value="__new_team__">
+                                  {labels.newTeam}
+                                </option>
+                              </select>
+                            )}
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              className="ps-input"
+                              style={{ minWidth: 100, fontSize: 12 }}
+                              value={row.first_name}
+                              onChange={(e) =>
+                                updateEditablePlayer(row.rowId, {
+                                  first_name: e.target.value,
+                                })
+                              }
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              className="ps-input"
+                              style={{ minWidth: 100, fontSize: 12 }}
+                              value={row.last_name}
+                              onChange={(e) =>
+                                updateEditablePlayer(row.rowId, {
+                                  last_name: e.target.value,
+                                })
+                              }
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              className="ps-input"
+                              style={{ minWidth: 70, fontSize: 12 }}
+                              value={
+                                row.jersey_number == null
+                                  ? ""
+                                  : String(row.jersey_number)
+                              }
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                updateEditablePlayer(row.rowId, {
+                                  jersey_number:
+                                    raw === "" ? null : Number(raw),
+                                });
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              className="ps-input"
+                              style={{ minWidth: 70, fontSize: 12 }}
+                              value={row.gender}
+                              onChange={(e) =>
+                                updateEditablePlayer(row.rowId, {
+                                  gender: e.target.value,
+                                })
+                              }
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              className="ps-input"
+                              style={{ minWidth: 90, fontSize: 12 }}
+                              value={row.nationality}
+                              onChange={(e) =>
+                                updateEditablePlayer(row.rowId, {
+                                  nationality: e.target.value,
+                                })
+                              }
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              className="ps-input"
+                              style={{ minWidth: 110, fontSize: 12 }}
+                              value={row.other}
+                              onChange={(e) =>
+                                updateEditablePlayer(row.rowId, {
+                                  other: e.target.value,
+                                })
+                              }
+                            />
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="ps-btn ps-btn--ghost"
+                              style={{ padding: "2px 8px", fontSize: 12 }}
+                              onClick={() => removeEditablePlayer(row.rowId)}
+                              disabled={busy}
+                              aria-label={labels.removeRow}
+                              title={labels.removeRow}
+                            >
+                              ×
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
+                {invalidRowIds.size > 0 ? (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 12,
+                      color: "#F44336",
+                    }}
+                  >
+                    {labels.rowInvalid}
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -846,7 +1114,11 @@ export default function TeamsAndPlayersPanel({
                 type="button"
                 className="ps-btn ps-btn--primary"
                 onClick={handleConfirmImport}
-                disabled={busy || (preview.players_to_create ?? 0) === 0}
+                disabled={
+                  busy ||
+                  editablePlayers.length === 0 ||
+                  invalidRowIds.size > 0
+                }
               >
                 {labels.confirmImport}
               </button>

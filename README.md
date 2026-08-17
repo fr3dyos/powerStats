@@ -79,10 +79,15 @@ these names):
    with the parsed rows and the chosen `column_map`. FastAPI dry-runs
    the import and returns the teams + players that would be created,
    plus any per-row validation errors, without writing anything.
-4. Inspect the proposed table — counts of teams to create, players to
-   create, rows with errors. Click **Confirm import** to call
-   `POST /api/admin/tournaments/<id>/bulk-import/commit`, which finally
-   persists the rows. Or click **Back** to adjust the column mapping.
+4. Inspect and edit the proposed table — all cells are editable so you
+   can fix typos (especially team names) before commit. The team column
+   offers a dropdown of existing + proposed teams, plus a "(new team…)"
+   option to create a fresh team name. Remove unwanted rows with the ×
+   button. Counts of teams to create, players to create, and rows with
+   errors appear above the table. Click **Confirm import** to call
+   `POST /api/admin/tournaments/<id>/bulk-import/commit` with your
+   edits, which finally persists the rows. Or click **Back** to adjust
+   the column mapping.
 
 The `other` column is intentionally free-form so admins can record
 handedness, dietary notes, or anything else without a schema change.
