@@ -1553,3 +1553,138 @@ def bulk_import_teams_and_players(
         players=[schemas.Player.from_orm(p) for p in created_players],
         errors=errors,
     )
+
+
+# ============================================================================
+# TEAM BULK-IMPORT (parallel to player bulk-import, column-mapping + preview + commit)
+# ============================================================================
+
+class BulkImportTeamsPayload(BaseModel):
+    """Bulk team import request, parallel to BulkImportPayload for players."""
+    teams: List[dict]
+    column_map: Optional[Dict[str, str]] = None
+    edited_teams: Optional[List[dict]] = None
+
+
+class BulkImportTeamsPreview(BaseModel):
+    """Dry-run result for team import."""
+    teams_to_create: int = 0
+    proposed_teams: List[dict] = []
+    existing_teams: List[dict] = []
+    errors: List[dict] = []
+
+
+class BulkImportTeamsReport(BaseModel):
+    """Result of bulk team import commit."""
+    teams_created: int = 0
+    teams: List[schemas.Team] = []
+    errors: List[dict] = []
+
+
+def _process_bulk_teams(
+    tournament_id: int,
+    rows: List[dict],
+    db: Session,
+    *,
+    persist: bool,
+    column_map: Optional[Dict[str, str]] = None,
+    edited_teams: Optional[List[dict]] = None,
+) -> Tuple[List[models.Team], List[dict]]:
+    """Shared core for team bulk-import preview + commit."""
+    created_teams: List[models.Team] = []
+    errors: List[dict] = []
+    team_cache: Dict[str, models.Team] = {}
+
+    def cell(row: dict, canonical: str) -> str:
+        row_lower = {str(k).strip().lower(): v for k, v in row.items()}
+        candidates: List[str] = []
+        if column_map:
+            mapped = column_map.get(canonical)
+            if mapped:
+                candidates.append(mapped)
+        candidates.append(canonical)
+        for header in candidates:
+            value = row_lower.get(str(header).strip().lower())
+            if value is not None:
+                return str(value).strip()
+        return ""
+
+    source_rows = edited_teams if edited_teams is not None else rows
+
+    for idx, row in enumerate(source_rows):
+        if not isinstance(row, dict):
+            errors.append({"row": idx + 1, "reason": "Row is not an object"})
+            continue
+
+        if edited_teams is not None:
+            team_name = str(row.get("team_name") or "").strip()
+            logo_url = str(row.get("logo_url") or "").strip() or None
+        else:
+            team_name = cell(row, "team") or cell(row, "name")
+            logo_url = cell(row, "logo_url") or cell(row, "logo") or None
+
+        if not team_name:
+            errors.append({"row": idx + 1, "reason": "Missing required field: team name"})
+            continue
+
+        try:
+            if team_name not in team_cache:
+                team = (
+                    db.query(models.Team)
+                    .filter_by(name=team_name, tournament_id=tournament_id)
+                    .first()
+                )
+                if not team:
+                    team = models.Team(
+                        name=team_name,
+                        tournament_id=tournament_id,
+                        logo_url=logo_url,
+                    )
+                    db.add(team)
+                    db.flush()
+                    if persist:
+                        created_teams.append(team)
+                    else:
+                        db.expunge(team)
+                        created_teams.append(team)
+                team_cache[team_name] = team
+        except Exception as exc:
+            errors.append({"row": idx + 1, "reason": str(exc)})
+
+    return created_teams, errors
+
+
+@router.post("/tournaments/{tournament_id}/bulk-import-teams/preview", response_model=BulkImportTeamsPreview)
+def bulk_import_teams_preview(
+    tournament_id: int,
+    payload: BulkImportTeamsPayload,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Dry-run team bulk import."""
+    _ensure_tournament_or_404(db, tournament_id)
+    created_teams, errors = _process_bulk_teams(tournament_id, payload.teams, db, persist=False, column_map=payload.column_map)
+    proposed_teams = [{"name": t.name, "tournament_id": t.tournament_id} for t in created_teams]
+    existing_team_rows = db.query(models.Team).filter_by(tournament_id=tournament_id).all()
+    existing_teams = [{"id": t.id, "name": t.name, "tournament_id": t.tournament_id} for t in existing_team_rows]
+    db.rollback()
+    return BulkImportTeamsPreview(teams_to_create=len(created_teams), proposed_teams=proposed_teams, existing_teams=existing_teams, errors=errors)
+
+
+@router.post("/tournaments/{tournament_id}/bulk-import-teams/commit", response_model=BulkImportTeamsReport)
+def bulk_import_teams_commit(
+    tournament_id: int,
+    payload: BulkImportTeamsPayload,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Commit bulk team import."""
+    _ensure_tournament_or_404(db, tournament_id)
+    created_teams, errors = _process_bulk_teams(tournament_id, payload.teams, db, persist=True, column_map=payload.column_map, edited_teams=payload.edited_teams)
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not commit bulk import: {str(exc)}") from exc
+    all_teams = db.query(models.Team).filter_by(tournament_id=tournament_id).all()
+    return BulkImportTeamsReport(teams_created=len(created_teams), teams=[schemas.Team.from_orm(t) for t in all_teams], errors=errors)
