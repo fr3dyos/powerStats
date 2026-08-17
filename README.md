@@ -211,7 +211,7 @@ powerstats/
 - **tournaments**: Tournament metadata and dates
 - **teams**: Teams with tournament association
 - **players**: Player profiles with team assignment
-- **games**: Match records with scores, rules, clock columns (`is_live`, `clock_running`, `clock_started_at`, `clock_elapsed`), and placement columns (`is_placement`, `placement_position`)
+- **games**: Match records with scores, rules, clock columns (`is_live`, `clock_running`, `clock_started_at`, `clock_elapsed`), placement columns (`is_placement`, `placement_position`), and admin scoring columns (`is_voided`, `forfeit_winner_team_id`)
 - **game_events**: Live scoring events (goals, assists, defenses, timeouts, halves)
 - **phases**: Tournament phases (round-robin, bracket)
 - **groups**: Group assignments within phases
