@@ -1,40 +1,38 @@
+import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+import { apiFetch } from "@/utils/api";
+
+type Params = { id: string };
+
 export async function POST(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  req: NextRequest,
+  ctx: { params: Promise<Params> },
 ) {
-  const { id } = await params;
+  await cookies();
+  const { id } = await ctx.params;
+
+  let body: unknown = null;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { detail: "Body must be JSON." },
+      { status: 400 },
+    );
+  }
 
   try {
-    const body = await req.json();
-    const cookieStore = await cookies();
-    const token = cookieStore.get("sb-token")?.value;
-
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    const res = await fetch(
-      `${apiUrl}/admin/tournaments/${id}/bulk-import-teams/preview`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      }
+    const data = await apiFetch(
+      `/admin/tournaments/${id}/bulk-import-teams/preview`,
+      { method: "POST", body },
     );
-
-    if (!res.ok) {
-      const error = await res.json().catch(() => ({}));
-      return Response.json(error, { status: res.status });
-    }
-
-    const data = await res.json();
-    return Response.json(data);
-  } catch (error) {
-    return Response.json(
-      { detail: error instanceof Error ? error.message : "Preview failed" },
-      { status: 500 }
-    );
+    return NextResponse.json(data);
+  } catch (err) {
+    const status =
+      (err as Error & { status?: number }).status ?? 500;
+    const detail =
+      err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ detail }, { status });
   }
 }

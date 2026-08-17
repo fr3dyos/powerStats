@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { teamColor, formatPlayerName } from "@/utils/api";
+import { teamColor, formatPlayerName } from "@/utils/api-shared";
 
 type PlayerRow = {
   id: number;
