@@ -275,6 +275,9 @@ class GameBase(BaseModel):
     # Spirit scores (0.0 - 10.0)
     spirit_home: Optional[float] = Field(None, ge=0.0, le=10.0)
     spirit_away: Optional[float] = Field(None, ge=0.0, le=10.0)
+    # Admin actions: void/forfeit
+    is_voided: bool = False
+    forfeit_winner_team_id: Optional[int] = None
 
 class GameCreate(GameBase):
     pass
@@ -310,6 +313,8 @@ class GameUpdate(BaseModel):
     placement_position: Optional[int] = Field(None, ge=1)
     spirit_home: Optional[float] = Field(None, ge=0.0, le=10.0)
     spirit_away: Optional[float] = Field(None, ge=0.0, le=10.0)
+    is_voided: Optional[bool] = None
+    forfeit_winner_team_id: Optional[int] = None
 
 class GameInDBBase(GameBase):
     id: int

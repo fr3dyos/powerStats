@@ -150,6 +150,11 @@ export default async function LiveScoringPage({
             advanceHalf: sc.advanceHalf,
             endGame: sc.endGame,
             endGameScoreCap: sc.endGameScoreCap,
+            voidGame: sc.voidGame,
+            voidGameConfirm: sc.voidGameConfirm,
+            markForfeit: sc.markForfeit,
+            selectWinningTeam: sc.selectWinningTeam,
+            dangerZone: sc.dangerZone,
           }}
         />
 

@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Papa from "papaparse";
+
+import { CsvButton } from "@/app/_components/CsvButton";
 
 type Team = {
   id: number;
@@ -10,12 +12,11 @@ type Team = {
 };
 
 type Player = {
+  id: number;
   first_name: string;
   last_name: string;
-  number: string;
-  team: string;
-  gender?: string;
-  other?: string;
+  jersey_number?: number | null;
+  team_id?: number;
 };
 
 type BulkImportReport = {
@@ -43,6 +44,9 @@ type Props = {
     submit: string;
     cancel: string;
     loading: string;
+    bulkImportColumnHelp: string;
+    bulkImportSummary: string;
+    exportCsv: string;
   };
 };
 
@@ -60,6 +64,38 @@ export default function TeamsAndPlayersPanel({
     null
   );
   const [dragActive, setDragActive] = useState(false);
+  const [roster, setRoster] = useState<
+    Array<Player & { team_name: string }>
+  >([]);
+
+  // Fetch roster (players grouped by team) any time the team list changes.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (teams.length === 0) {
+        setRoster([]);
+        return;
+      }
+      const results: Array<Player & { team_name: string }> = [];
+      for (const t of teams) {
+        try {
+          const res = await fetch(`/api/players?team_id=${t.id}`);
+          if (!res.ok) continue;
+          const data: Player[] = await res.json();
+          for (const p of data) {
+            results.push({ ...p, team_name: t.name });
+          }
+        } catch {
+          // ignore
+        }
+      }
+      if (!cancelled) setRoster(results);
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [teams, tournamentId]);
 
   const handleAddTeam = async () => {
     if (!newTeamName.trim()) return;
@@ -152,18 +188,23 @@ export default function TeamsAndPlayersPanel({
         throw new Error("No rows found in file");
       }
 
-      // Validate required columns
-      const requiredCols = [
-        "player name",
-        "player lastname",
-        "player number",
-        "team",
-      ];
-      const headers = Object.keys(rows[0] || {}).map((h) => h.toLowerCase());
+      // Validate required columns. "player lastname" and "player last name"
+      // are interchangeable; we accept either.
+      const requiredCols = ["player name", "player number", "team"];
+      const lastnameCols = ["player lastname", "player last name"];
+      const headers = Object.keys(rows[0] || {}).map((h) =>
+        h.toLowerCase().trim(),
+      );
       const missing = requiredCols.filter((col) => !headers.includes(col));
+      const hasLastname = lastnameCols.some((col) => headers.includes(col));
       if (missing.length > 0) {
         throw new Error(
-          `Missing required columns: ${missing.join(", ")}`
+          `Missing required columns: ${missing.join(", ")}`,
+        );
+      }
+      if (!hasLastname) {
+        throw new Error(
+          `Missing required column: "player lastname" or "player last name"`,
         );
       }
 
@@ -188,9 +229,9 @@ export default function TeamsAndPlayersPanel({
       onTeamsUpdated(updatedTeams);
       setFile(null);
 
-      const summary =
-        `Imported: ${report.teams_created || 0} teams, ` +
-        `${report.players_created || 0} players`;
+      const summary = labels.bulkImportSummary
+        .replace("{teams}", String(report.teams_created || 0))
+        .replace("{players}", String(report.players_created || 0));
       setMessage({ ok: true, text: summary });
     } catch (err) {
       setMessage({
@@ -315,7 +356,7 @@ export default function TeamsAndPlayersPanel({
               fontSize: 11,
             }}
           >
-            {`player name, player lastname, player number, team, gender, other`}
+            {labels.bulkImportColumnHelp}
           </pre>
         </details>
 
@@ -356,6 +397,62 @@ export default function TeamsAndPlayersPanel({
             </button>
           )}
         </div>
+      </div>
+
+      {/* Existing roster */}
+      <div className="ps-card">
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 8,
+            marginBottom: 12,
+          }}
+        >
+          <h2 style={{ fontSize: 18, margin: 0 }}>{labels.players}</h2>
+          <CsvButton
+            filename={`tournament-${tournamentId}-roster`}
+            label={labels.exportCsv}
+            variant="ghost"
+            rows={roster.map((r) => ({
+              team: r.team_name,
+              first_name: r.first_name,
+              last_name: r.last_name,
+              number: r.jersey_number ?? "",
+            }))}
+          />
+        </div>
+
+        {roster.length === 0 ? (
+          <p style={{ color: "var(--ps-text-muted)", margin: 0 }}>
+            No players yet.
+          </p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table className="ps-table">
+              <thead>
+                <tr>
+                  <th>Team</th>
+                  <th>Name</th>
+                  <th>Number</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roster.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.team_name}</td>
+                    <td>
+                      {r.first_name} {r.last_name}
+                    </td>
+                    <td>{r.jersey_number ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

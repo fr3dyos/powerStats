@@ -262,6 +262,17 @@ export const tournamentsApi = {
 };
 
 export const teamsApi = {
+  /**
+   * Paginated list of all teams. Used by the /players index to render the
+   * "current team" column. Keep page size bounded by the caller.
+   */
+  list: (params?: { skip?: number; limit?: number }) =>
+    apiFetch<Team[]>("/teams", {
+      query: {
+        ...(params?.skip !== undefined ? { skip: params.skip } : {}),
+        ...(params?.limit !== undefined ? { limit: params.limit } : {}),
+      },
+    }),
   listByTournament: (tournamentId: number) =>
     apiFetch<Team[]>("/teams", { query: { tournament_id: tournamentId } }),
   get: (id: number) =>
@@ -284,6 +295,21 @@ export const teamsApi = {
 };
 
 export const playersApi = {
+  /**
+   * Paginated list of players. Used by the /players index. When `teamId` is
+   * omitted, returns players across all teams.
+   */
+  list: (
+    teamId?: number,
+    params?: { skip?: number; limit?: number },
+  ) =>
+    apiFetch<Player[]>("/players", {
+      query: {
+        ...(teamId !== undefined ? { team_id: teamId } : {}),
+        ...(params?.skip !== undefined ? { skip: params.skip } : {}),
+        ...(params?.limit !== undefined ? { limit: params.limit } : {}),
+      },
+    }),
   listByTeam: (teamId: number) =>
     apiFetch<Player[]>("/players", { query: { team_id: teamId } }),
   create: (input: {
@@ -374,6 +400,13 @@ export const gamesApi = {
     apiFetch<Game[]>("/games/batch", {
       method: "POST",
       body: { tournament_id: tournamentId, games },
+    }),
+  void: (id: number) =>
+    apiFetch<Game>(`/api/admin/games/${id}/void`, { method: "POST" }),
+  markForfeit: (id: number, winnerTeamId: number) =>
+    apiFetch<Game>(`/api/admin/games/${id}/forfeit`, {
+      method: "POST",
+      body: { winner_team_id: winnerTeamId },
     }),
 };
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/app/_components/AppShell";
+import { CsvButton } from "@/app/_components/CsvButton";
 import {
   computeStandings,
   formatDate,
@@ -432,16 +433,50 @@ export default async function TournamentDetailPage({
 
         {/* ─── Completed fixtures ───────────────────────────────────── */}
         <section style={{ marginBottom: 32 }}>
-          <div className="ps-section">
-            <span className="ps-section__eyebrow">{common.completed}</span>
-            <h2>{common.completed}</h2>
-            <p>
-              {completed.length}{" "}
-              {completed.length === 1
-                ? common.gamesPlayedShort
-                : common.games}{" "}
-              {common.completed}
-            </p>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-end",
+              flexWrap: "wrap",
+              gap: 12,
+              marginBottom: 12,
+            }}
+          >
+            <div className="ps-section" style={{ margin: 0 }}>
+              <span className="ps-section__eyebrow">{common.completed}</span>
+              <h2>{common.completed}</h2>
+              <p>
+                {completed.length}{" "}
+                {completed.length === 1
+                  ? common.gamesPlayedShort
+                  : common.games}{" "}
+                {common.completed}
+              </p>
+            </div>
+            <CsvButton
+              filename={`${tournament.name.replace(/\s+/g, "-").toLowerCase()}-schedule`}
+              label={common.exportCsv}
+              variant="ghost"
+              rows={[...games]
+                .sort((a, b) => {
+                  const at = a.start_time ? Date.parse(a.start_time) : 0;
+                  const bt = b.start_time ? Date.parse(b.start_time) : 0;
+                  return at - bt;
+                })
+                .map((g) => ({
+                  game_id: g.id,
+                  phase_id: g.phase_id,
+                  start_time: g.start_time ?? "",
+                  end_time: g.end_time ?? "",
+                  field: g.field_number ?? "",
+                  home_team: teamMap.get(g.home_team_id)?.name ?? "",
+                  away_team: teamMap.get(g.away_team_id)?.name ?? "",
+                  home_score: g.home_score,
+                  away_score: g.away_score,
+                  completed: g.is_completed ? "yes" : "no",
+                }))}
+            />
           </div>
 
           {completedSorted.length === 0 ? (

@@ -31,6 +31,7 @@ type Props = {
     suggestSchedule: string;
     suggestScheduleFailed: string;
     suggestScheduleSuccess: string;
+    suggestScheduleFieldCount: string;
     advancedTeamsPerGroup: string;
     groupCount: string;
     advancingTeams: string;
@@ -170,15 +171,41 @@ export default function PhaseEditor({
 
   const suggestSchedule = async () => {
     if (busy) return;
+
+    const fieldCountRaw = window.prompt(
+      labels.suggestScheduleFieldCount || "How many fields are available?",
+      "2",
+    );
+    if (fieldCountRaw === null) return;
+    const fieldCount = Number(fieldCountRaw);
+    if (!Number.isFinite(fieldCount) || fieldCount < 1) {
+      setError(labels.suggestScheduleFailed || "Invalid field count");
+      return;
+    }
+
     setBusy("schedule");
     setError(null);
     try {
+      const params = new URLSearchParams({
+        field_count: String(fieldCount),
+        minutes_per_game: "30",
+      });
       const res = await fetch(
-        `/api/tournaments/${tournamentId}/schedule-suggestion`,
-        { method: "POST" },
+        `/api/tournaments/${tournamentId}/schedule-suggestion?${params}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ field_count: fieldCount, minutes_per_game: 30 }),
+        },
       );
-      if (!res.ok) throw new Error("Failed");
-      setError(null);
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(detail.detail ?? "Failed");
+      }
+      const data = await res.json().catch(() => null);
+      window.alert(
+        labels.suggestScheduleSuccess || `Schedule suggested (${data?.total_slots ?? 0} slots).`,
+      );
     } catch (err) {
       setError(
         err instanceof Error ? err.message : labels.suggestScheduleFailed,
@@ -312,6 +339,9 @@ export default function PhaseEditor({
             <label style={{ display: "block", fontSize: 12, marginBottom: 4 }}>
               {labels.tiebreakers}
             </label>
+            <p style={{ fontSize: 11, color: "var(--ps-text-muted)", margin: "0 0 8px 0" }}>
+              Drag or use arrows to set hierarchy (top = highest priority)
+            </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {TIEBREAKERS.map((tb, idx) => {
                 const checked =

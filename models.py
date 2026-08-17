@@ -204,6 +204,16 @@ class Game(Base):
     # engine; recorded by the admin after each game).
     spirit_home = Column(Float, nullable=True)
     spirit_away = Column(Float, nullable=True)
+    # Admin actions: void an entire game, or record a forfeit winner.
+    # `is_voided=True` means the result is annulled (typically because the
+    # game cannot be replayed and shouldn't count toward standings). Setting
+    # `forfeit_winner_team_id` records which team won by forfeit; we leave
+    # the score untouched so the audit trail is preserved. The two are
+    # independent — void overrides forfeit's standings impact at compute time.
+    is_voided = Column(Boolean, default=False)
+    forfeit_winner_team_id = Column(
+        Integer, ForeignKey("teams.id"), nullable=True
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -212,6 +222,7 @@ class Game(Base):
     phase = relationship("Phase", back_populates="games")
     home_team = relationship("Team", foreign_keys=[home_team_id], back_populates="home_games")
     away_team = relationship("Team", foreign_keys=[away_team_id], back_populates="away_games")
+    forfeit_winner = relationship("Team", foreign_keys=[forfeit_winner_team_id])
     game_events = relationship("GameEvent", back_populates="game")
 
 # GameEvent model

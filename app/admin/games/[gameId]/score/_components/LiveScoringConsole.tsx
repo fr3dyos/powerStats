@@ -26,6 +26,11 @@ type Props = {
     advanceHalf: string;
     endGame: string;
     endGameScoreCap: string;
+    voidGame: string;
+    voidGameConfirm: string;
+    markForfeit: string;
+    selectWinningTeam: string;
+    dangerZone: string;
   };
 };
 
@@ -53,6 +58,7 @@ export function LiveScoringConsole({
   // Game-clock ticker: `clockNow` re-renders the console once per second
   // while the clock is running so the elapsed display stays live.
   const [clockNow, setClockNow] = useState<number>(() => Date.now());
+  const [forfeitWinnerId, setForfeitWinnerId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!game.clock_running) return;
@@ -339,6 +345,60 @@ export function LiveScoringConsole({
       clock_elapsed: 0,
     });
   }, [patchGame]);
+
+  const voidGame = useCallback(async () => {
+    if (!canEdit || game.is_completed) return;
+    if (!confirm(labels.voidGameConfirm)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/games/${game.id}/void`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const detail = await res
+          .json()
+          .catch(() => ({ detail: res.statusText }));
+        throw new Error(detail.detail ?? `Request failed (${res.status})`);
+      }
+      const updated: Game = await res.json();
+      setGame(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [canEdit, game.id, game.is_completed, labels.voidGameConfirm]);
+
+  const markForfeit = useCallback(async () => {
+    if (!canEdit || game.is_completed) return;
+    if (forfeitWinnerId === null) {
+      setError("Please select a winning team.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/games/${game.id}/forfeit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ winner_team_id: forfeitWinnerId }),
+      });
+      if (!res.ok) {
+        const detail = await res
+          .json()
+          .catch(() => ({ detail: res.statusText }));
+        throw new Error(detail.detail ?? `Request failed (${res.status})`);
+      }
+      const updated: Game = await res.json();
+      setGame(updated);
+      setForfeitWinnerId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [canEdit, game.id, game.is_completed, forfeitWinnerId]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -698,6 +758,82 @@ export function LiveScoringConsole({
           </ul>
         )}
       </div>
+
+      {canEdit && !game.is_completed ? (
+        <div
+          className="ps-card"
+          style={{
+            padding: 16,
+            borderLeft: "3px solid var(--ps-danger, #c0392b)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>
+            {labels.dangerZone}
+          </h3>
+          <p style={{ fontSize: 12, color: "var(--ps-text-muted)", margin: 0 }}>
+            Admin-only actions. Use with caution — these affect standings.
+          </p>
+          <button
+            type="button"
+            className="ps-btn"
+            style={{
+              background: "var(--ps-danger, #c0392b)",
+              color: "#fff",
+              border: "none",
+              padding: "8px 16px",
+              borderRadius: "var(--ps-radius)",
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+            onClick={() => voidGame()}
+            disabled={busy}
+          >
+            {labels.voidGame}
+          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+            <select
+              value={forfeitWinnerId ?? ""}
+              onChange={(e) =>
+                setForfeitWinnerId(e.target.value ? Number(e.target.value) : null)
+              }
+              style={{
+                padding: "8px 12px",
+                borderRadius: "var(--ps-radius)",
+                border: "1px solid var(--ps-divider)",
+                background: "var(--ps-surface-container-low)",
+                color: "var(--ps-text)",
+                flex: 1,
+              }}
+            >
+              <option value="">{labels.selectWinningTeam}</option>
+              <option value={homeTeam.id}>{homeTeam.name}</option>
+              <option value={awayTeam.id}>{awayTeam.name}</option>
+            </select>
+            <button
+              type="button"
+              className="ps-btn"
+              style={{
+                background: "var(--ps-danger, #c0392b)",
+                color: "#fff",
+                border: "none",
+                padding: "8px 16px",
+                borderRadius: "var(--ps-radius)",
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+              onClick={() => markForfeit()}
+              disabled={busy || forfeitWinnerId === null}
+            >
+              {labels.markForfeit}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <p
         style={{

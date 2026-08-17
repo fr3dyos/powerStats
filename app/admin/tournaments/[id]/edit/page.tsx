@@ -114,6 +114,7 @@ export default async function EditTournamentPage({
             suggestSchedule: at.suggestSchedule,
             suggestScheduleFailed: at.suggestScheduleFailed,
             suggestScheduleSuccess: at.suggestScheduleSuccess,
+            suggestScheduleFieldCount: at.suggestScheduleFieldCount,
             groupCount: at.groupCount,
             advancingTeams: at.advancingTeams,
             tiebreakers: at.tiebreakers,
@@ -127,6 +128,9 @@ export default async function EditTournamentPage({
             selectFile: "Select file",
             submit: at.create,
             loading: at.saving,
+            bulkImportColumnHelp: at.bulkImportColumnHelp,
+            bulkImportSummary: at.bulkImportSummary,
+            exportCsv: common.exportCsv,
           }}
           canEdit={role === "admin"}
         />

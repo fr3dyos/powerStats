@@ -55,7 +55,9 @@
     "scheduled": "Scheduled",
     "player": "Player",
     "inProgress": "in progress",
-    "footer": "built for Ultimate."
+    "footer": "built for Ultimate.",
+    "exportCsv": "Export CSV",
+    "exportCalendar": "Export calendar"
   },
   "home": {
     "welcome": "Welcome to PowerStats",
@@ -127,7 +129,9 @@
     "points": "Pts",
     "spirit": "Spirit",
     "tiebreakers": "Tiebreakers",
-    "noStandings": "No standings available for this phase yet."
+    "noStandings": "No standings available for this phase yet.",
+    "allGroups": "All groups",
+    "groupTabAria": "Standings group filter"
   },
   "team": {
     "title": "Team profile",
@@ -173,6 +177,14 @@
     "spiritOfTheGame": "Spirit of the Game",
     "noSotg": "SOTG ratings are not collected for this player yet.",
     "noTournamentStats": "No tournament stats yet."
+  },
+  "playersIndex": {
+    "eyebrow": "Players",
+    "title": "Player directory",
+    "subtitle": "Browse every player in the league.",
+    "searchPlaceholder": "Search by name, jersey, or team",
+    "noPlayers": "No players registered yet.",
+    "resultCount": "{count} player(s)"
   },
   "rankings": {
     "eyebrow": "Rankings",
@@ -364,6 +376,7 @@
     "saved": "Role updated.",
     "saveFailed": "Could not update role.",
     "selectRole": "Select role",
+    "searchPlaceholder": "Search users",
     "roleAdmin": "Admin",
     "roleScorekeeper": "Scorekeeper",
     "rolePublic": "Public",
@@ -403,7 +416,8 @@
     "deleteForbidden": "Only admins can delete teams.",
     "teamDeleteFailed": "Could not delete team.",
     "teamDeleted": "Team deleted.",
-    "teamExists": "A team with that name already exists in this tournament."
+    "teamExists": "A team with that name already exists in this tournament.",
+    "searchPlaceholder": "Search teams"
   },
   "adminPlayers": {
     "title": "Players",
@@ -472,12 +486,14 @@
     "manySelected": "{count} rows selected",
     "deleteConfirm": "Delete {count} selected tournament(s)? This cannot be undone.",
     "scheduleGames": "Schedule",
+    "searchPlaceholder": "Search tournaments",
     "groupCount": "Group count",
     "advancingTeams": "Advancing teams",
     "tiebreakers": "Tiebreakers",
     "suggestSchedule": "Suggest schedule",
     "suggestScheduleFailed": "Could not suggest a schedule.",
     "suggestScheduleSuccess": "Schedule suggested. Review games below.",
+    "suggestScheduleFieldCount": "How many fields are available?",
     "phaseDeleteConfirm": "Delete this phase? Games in this phase will lose their grouping.",
     "importRoster": "Import roster",
     "importRosterHelp": "Required columns: name, nickname, team. Extra columns are mapped to player stats.",
@@ -487,6 +503,8 @@
     "importRosterPaste": "Paste CSV",
     "importRosterFile": "Upload file",
     "importRosterTemplate": "CSV template",
+    "bulkImportColumnHelp": "Required columns: player name, player number, team, and either 'player lastname' or 'player last name'. Optional: gender, other. Teams are auto-created.",
+    "bulkImportSummary": "Imported {teams} team(s) and {players} player(s).",
     "importSpirit": "Import spirit scores",
     "importSpiritHelp": "Required columns: team, team_against, score_1…score_5 (WFDF SOTG). Each score is 0–4.",
     "importSpiritSubmit": "Upload spirit scores",
@@ -518,6 +536,7 @@
     "noTeamsHint": "You need at least two teams registered to schedule a game. Add teams first.",
     "selectTeamsHint": "Select two teams and a start time, or upload a CSV to schedule many games at once.",
     "pickTournamentFirst": "Pick a tournament first",
+    "searchPlaceholder": "Search games",
     "singleGame": "Single game",
     "bulkUpload": "CSV bulk upload",
     "homeTeam": "Home team",
@@ -556,6 +575,11 @@
     "endTimeout": "End timeout",
     "advanceHalf": "Advance half",
     "endGame": "End game",
-    "endGameScoreCap": "End (score cap)"
+    "endGameScoreCap": "End (score cap)",
+    "voidGame": "Void game",
+    "voidGameConfirm": "Are you sure? This will annul the game and remove it from standings.",
+    "markForfeit": "Mark forfeit",
+    "selectWinningTeam": "Select the team that won by forfeit",
+    "dangerZone": "Danger zone"
   }
 }

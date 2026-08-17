@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/app/_components/ThemeToggle";
 const GLOBAL_NAV = [
   { href: "/rankings", label: "Rankings" },
   { href: "/teams", label: "Teams" },
+  { href: "/players", label: "Players" },
   { href: "/games", label: "Games" },
   { href: "/tournaments", label: "Tournaments" },
   { href: "/admin", label: "Admin" },

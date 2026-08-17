@@ -12,6 +12,7 @@ import { teamColor, type Team } from "@/utils/api-shared";
 import { mapWithConcurrency } from "@/utils/async";
 import { AppShell } from "@/app/_components/AppShell";
 import { createClient } from "@/utils/supabase/client";
+import { ListSearch, matchesQuery } from "@/app/_components/ListSearch";
 
 // --- Lightweight client fetch helper ---------------------------------
 // Talks to the Next.js `/api/*` proxy routes. Each returns parsed JSON
@@ -190,6 +191,15 @@ export default function TeamsPage() {
     [teams],
   );
 
+  const [query, setQuery] = useState("");
+  const filteredSorted = useMemo(
+    () =>
+      sorted.filter((t) =>
+        matchesQuery(query, [t.name, t.league, String(t.wins), String(t.losses)]),
+      ),
+    [sorted, query],
+  );
+
   return (
     <AppShell footerText="built for Ultimate.">
     <section
@@ -268,6 +278,14 @@ export default function TeamsPage() {
         </div>
       ) : (
         <div className="ps-card" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--ps-border)" }}>
+            <ListSearch
+              query={query}
+              onQueryChange={setQuery}
+              placeholder="Search teams by name, league, W or L"
+              countLabel={`${filteredSorted.length} of ${sorted.length}`}
+            />
+          </div>
           <table className="ps-table">
             <thead>
               <tr>
@@ -282,7 +300,7 @@ export default function TeamsPage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((t) => {
+              {filteredSorted.map((t) => {
                 const accent = teamColor(t.name);
                 const isBusy = busyId === t.id;
                 return (

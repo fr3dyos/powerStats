@@ -10,10 +10,11 @@ export async function POST(req: NextRequest, { params }: Params) {
   await cookies();
   const { phaseId } = await params;
   const body = await req.json().catch(() => ({}));
+  const persist = body?.persist ?? false;
   try {
     const data = await apiFetch(`/phases/${phaseId}/round-robin`, {
       method: "POST",
-      body,
+      query: { persist: String(persist) },
     });
     return NextResponse.json(data, { status: 201 });
   } catch (err) {

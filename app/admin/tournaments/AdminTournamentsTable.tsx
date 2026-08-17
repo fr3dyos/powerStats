@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { formatDate, formatDateRange, type Game, type Team, type Tournament } from "@/utils/api-shared";
+import { ListSearch, matchesQuery } from "@/app/_components/ListSearch";
 
 type Row = {
   tournament: Tournament;
@@ -42,6 +43,7 @@ type Labels = {
   manySelected: string;
   deleteConfirm: string;
   scheduleGames: string;
+  searchPlaceholder: string;
 };
 
 type AdminTournamentsTableProps = {
@@ -55,6 +57,20 @@ export default function AdminTournamentsTable({
 }: AdminTournamentsTableProps) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [query, setQuery] = useState("");
+
+  const visibleRows = useMemo(
+    () =>
+      rows.filter((r) =>
+        matchesQuery(query, [
+          r.tournament.name,
+          r.tournament.location ?? "",
+          r.tournament.status ?? "",
+          r.teams.map((t) => t.name).join(" "),
+        ]),
+      ),
+    [rows, query],
+  );
 
   const allIds = useMemo(() => rows.map((r) => r.tournament.id), [rows]);
   const allSelected = rows.length > 0 && selectedIds.size === rows.length;
@@ -147,6 +163,12 @@ export default function AdminTournamentsTable({
           padding: 12,
         }}
       >
+        <ListSearch
+          query={query}
+          onQueryChange={setQuery}
+          placeholder={labels.searchPlaceholder}
+          countLabel={`${visibleRows.length} of ${rows.length}`}
+        />
         <div
           style={{
             display: "flex",
@@ -212,7 +234,7 @@ export default function AdminTournamentsTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ tournament, teams: tlist, games: glist }) => {
+            {visibleRows.map(({ tournament, teams: tlist, games: glist }) => {
               const completed = glist.filter((g) => g.is_completed).length;
               const isSelected = selectedIds.has(tournament.id);
               return (

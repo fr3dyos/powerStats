@@ -90,6 +90,7 @@ export default async function AdminTournamentsPage() {
     manySelected: at.manySelected,
     deleteConfirm: at.deleteConfirm,
     scheduleGames: at.scheduleGames,
+    searchPlaceholder: at.searchPlaceholder,
   };
 
   return (

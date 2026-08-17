@@ -38,6 +38,7 @@ type Props = {
     suggestSchedule: string;
     suggestScheduleFailed: string;
     suggestScheduleSuccess: string;
+    suggestScheduleFieldCount: string;
     groupCount: string;
     advancingTeams: string;
     tiebreakers: string;
@@ -51,6 +52,9 @@ type Props = {
     selectFile: string;
     submit: string;
     loading: string;
+    bulkImportColumnHelp: string;
+    bulkImportSummary: string;
+    exportCsv: string;
   };
   canEdit: boolean;
 };
@@ -303,6 +307,9 @@ export function TournamentEditForm({
           submit: labels.submit,
           cancel: labels.cancel,
           loading: labels.loading,
+          bulkImportColumnHelp: labels.bulkImportColumnHelp,
+          bulkImportSummary: labels.bulkImportSummary,
+          exportCsv: labels.exportCsv,
         }}
       />
 

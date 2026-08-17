@@ -55,7 +55,9 @@
     "scheduled": "Programado",
     "player": "Jugador",
     "inProgress": "en curso",
-    "footer": "hecho para Ultimate."
+    "footer": "hecho para Ultimate.",
+    "exportCsv": "Exportar CSV",
+    "exportCalendar": "Exportar calendario"
   },
   "home": {
     "welcome": "Bienvenido a PowerStats",
@@ -127,7 +129,9 @@
     "points": "Pts",
     "spirit": "Espíritu",
     "tiebreakers": "Desempates",
-    "noStandings": "Aún no hay clasificación disponible para esta fase."
+    "noStandings": "Aún no hay clasificación disponible para esta fase.",
+    "allGroups": "Todos los grupos",
+    "groupTabAria": "Filtro de grupo de clasificación"
   },
   "team": {
     "title": "Perfil de equipo",
@@ -173,6 +177,14 @@
     "spiritOfTheGame": "Espíritu del Juego",
     "noSotg": "Aún no se recopilan calificaciones SOTG para este jugador.",
     "noTournamentStats": "Aún no hay estadísticas de torneo."
+  },
+  "playersIndex": {
+    "eyebrow": "Jugadores",
+    "title": "Directorio de jugadores",
+    "subtitle": "Explora a todos los jugadores de la liga.",
+    "searchPlaceholder": "Buscar por nombre, dorsal o equipo",
+    "noPlayers": "Aún no hay jugadores registrados.",
+    "resultCount": "{count} jugador(es)"
   },
   "rankings": {
     "eyebrow": "Clasificación",
@@ -364,6 +376,7 @@
     "saved": "Rol actualizado.",
     "saveFailed": "No se pudo actualizar el rol.",
     "selectRole": "Seleccionar rol",
+    "searchPlaceholder": "Buscar usuarios",
     "roleAdmin": "Administrador",
     "roleScorekeeper": "Anotador",
     "rolePublic": "Público",
@@ -403,7 +416,8 @@
     "deleteForbidden": "Solo los administradores pueden eliminar equipos.",
     "teamDeleteFailed": "No se pudo eliminar el equipo.",
     "teamDeleted": "Equipo eliminado.",
-    "teamExists": "Ya existe un equipo con ese nombre en este torneo."
+    "teamExists": "Ya existe un equipo con ese nombre en este torneo.",
+    "searchPlaceholder": "Buscar equipos"
   },
   "adminPlayers": {
     "title": "Jugadores",
@@ -472,12 +486,14 @@
     "manySelected": "{count} filas seleccionadas",
     "deleteConfirm": "¿Eliminar {count} torneo(s) seleccionado(s)? Esta acción no se puede deshacer.",
     "scheduleGames": "Programar",
+    "searchPlaceholder": "Buscar torneos",
     "groupCount": "Cantidad de grupos",
     "advancingTeams": "Equipos que avanzan",
     "tiebreakers": "Desempates",
     "suggestSchedule": "Sugerir programación",
     "suggestScheduleFailed": "No se pudo sugerir una programación.",
     "suggestScheduleSuccess": "Programación sugerida. Revisa los partidos abajo.",
+    "suggestScheduleFieldCount": "¿Cuántas canchas hay disponibles?",
     "phaseDeleteConfirm": "¿Eliminar esta fase? Los partidos de la fase perderán su agrupación.",
     "importRoster": "Importar plantilla",
     "importRosterHelp": "Columnas requeridas: name, nickname, team. Las columnas extra se asignan a estadísticas del jugador.",
@@ -487,6 +503,8 @@
     "importRosterPaste": "Pegar CSV",
     "importRosterFile": "Subir archivo",
     "importRosterTemplate": "Plantilla CSV",
+    "bulkImportColumnHelp": "Columnas requeridas: player name, player number, team, y 'player lastname' o 'player last name'. Opcionales: gender, other. Los equipos se crean automáticamente.",
+    "bulkImportSummary": "Se importaron {teams} equipo(s) y {players} jugador(es).",
     "importSpirit": "Importar puntajes de espíritu",
     "importSpiritHelp": "Columnas requeridas: team, team_against, score_1…score_5 (WFDF SOTG). Cada puntaje es 0–4.",
     "importSpiritSubmit": "Subir puntajes de espíritu",
@@ -518,6 +536,7 @@
     "noTeamsHint": "Necesitas al menos dos equipos registrados para programar un partido. Agrega equipos primero.",
     "selectTeamsHint": "Selecciona dos equipos y una hora de inicio, o sube un CSV para programar varios partidos de una vez.",
     "pickTournamentFirst": "Elige un torneo primero",
+    "searchPlaceholder": "Buscar partidos",
     "singleGame": "Partido único",
     "bulkUpload": "Carga masiva CSV",
     "homeTeam": "Equipo local",
@@ -556,6 +575,11 @@
     "endTimeout": "Terminar tiempo fuera",
     "advanceHalf": "Avanzar mitad",
     "endGame": "Finalizar partido",
-    "endGameScoreCap": "Finalizar (límite de puntos)"
+    "endGameScoreCap": "Finalizar (límite de puntos)",
+    "voidGame": "Anular partido",
+    "voidGameConfirm": "¿Estás seguro? Esto anulará el partido y lo eliminará de la clasificación.",
+    "markForfeit": "Marcar como forfeit",
+    "selectWinningTeam": "Selecciona el equipo ganador por abandono",
+    "dangerZone": "Zona de peligro"
   }
 }

@@ -14,6 +14,7 @@ import { formatDate, type Game, type Team, type Tournament } from "@/utils/api-s
 import { mapWithConcurrency } from "@/utils/async";
 import { AppShell } from "@/app/_components/AppShell";
 import { createClient } from "@/utils/supabase/client";
+import { ListSearch, matchesQuery } from "@/app/_components/ListSearch";
 
 // --- Tiny fetch wrapper (mirrors the one in /teams; consolidated when
 // both pages move to use `apiFetch` from utils/api.ts).
@@ -51,6 +52,7 @@ export default function GamesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAuthed, setIsAuthed] = useState(false);
+  const [query, setQuery] = useState("");
 
   // New-game inline form state — kept local; replaced by a full page when
   // the create flow lands elsewhere.
@@ -181,6 +183,18 @@ export default function GamesPage() {
           <p>No games scheduled yet.</p>
         </div>
       ) : (
+        <>
+        <ListSearch
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="Search games by team or tournament"
+          countLabel={`${sorted.filter((r) => matchesQuery(query, [r.homeName, r.awayName, r.tournamentName])).length} of ${sorted.length}`}
+        />
+        {sorted.filter((r) => matchesQuery(query, [r.homeName, r.awayName, r.tournamentName])).length === 0 ? (
+          <div className="ps-card" role="status">
+            <p style={{ margin: 0 }}>No games match "{query}".</p>
+          </div>
+        ) : (
         <div className="ps-card" style={{ padding: 0, overflow: "hidden" }}>
           <table className="ps-table">
             <thead>
@@ -194,7 +208,7 @@ export default function GamesPage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map(({ game, homeName, awayName, tournamentName }) => {
+              {sorted.filter((r) => matchesQuery(query, [r.homeName, r.awayName, r.tournamentName])).map(({ game, homeName, awayName, tournamentName }) => {
                 const status = statusOf(game);
                 return (
                   <tr key={game.id}>
@@ -261,6 +275,8 @@ export default function GamesPage() {
             </tbody>
           </table>
         </div>
+        )}
+        </>
       )}
     </section>
     </AppShell>

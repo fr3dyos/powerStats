@@ -14,6 +14,8 @@ import {
 } from "@/utils/api";
 import { mapWithConcurrency } from "@/utils/async";
 
+import { AdminTeamsFilterableList } from "./_components/AdminTeamsFilterableList";
+
 export const dynamic = "force-dynamic";
 
 const ALLOWED_ROLES = new Set(["admin", "scorekeeper"]);
@@ -88,101 +90,18 @@ authLinks={[
             <p>{at.emptyCopy}</p>
           </div>
         ) : (
-          <div
-            className="ps-card-list"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-              gap: 16,
+          <AdminTeamsFilterableList
+            groups={perTournament.map((p) => ({
+              tournament: { id: p.tournament.id, name: p.tournament.name },
+              teams: p.teams,
+            }))}
+            labels={{
+              searchPlaceholder: at.searchPlaceholder,
+              teamCount: at.teamCount,
+              noTeams: at.noTeams,
+              editTeam: ap.editTeam,
             }}
-          >
-            {perTournament.map(({ tournament, teams: tlist }) => (
-              <div key={tournament.id} className="ps-card">
-                <header
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginBottom: 12,
-                  }}
-                >
-<h3 style={{ fontSize: 16 }}>{tournament.name}</h3>
-                  <span className="ps-pill">
-                    {at.teamCount.replace("{count}", String(tlist.length))}
-                  </span>
-                </header>
-                {tlist.length === 0 ? (
-                  <p style={{ color: "var(--ps-text-muted)", fontSize: 13 }}>
-                    {at.noTeams}
-                  </p>
-                ) : (
-                  <ul
-                    style={{
-                      listStyle: "none",
-                      padding: 0,
-                      margin: 0,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 6,
-                    }}
-                  >
-                    {tlist.map((t) => {
-                      const accent = teamColor(t.name);
-                      return (
-                        <li
-                          key={t.id}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 8,
-                          }}
-                        >
-                          <Link
-                            href={`/teams/${t.id}`}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 10,
-                              color: "var(--ps-text)",
-                              textDecoration: "none",
-                              fontWeight: 600,
-                              flex: 1,
-                              minWidth: 0,
-                            }}
-                          >
-                            <span
-                              className="ps-disc ps-disc--sm"
-                              style={{
-                                background: accent ?? undefined,
-                                color: "#fff",
-                                borderColor: accent ?? undefined,
-                              }}
-                            >
-                              {t.name.slice(0, 2).toUpperCase()}
-                            </span>
-                            {t.name}
-                          </Link>
-                          <Link
-                            href={`/admin/teams/${t.id}/edit`}
-                            className="ps-btn ps-btn--ghost"
-                            aria-label={`${ap.editTeam}: ${t.name}`}
-                            title={ap.editTeam}
-                            style={{
-                              fontSize: 12,
-                              padding: "4px 10px",
-                            }}
-                          >
-                            {ap.editTeam}
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            ))}
-          </div>
+          />
         )}
       </section>
     </AppShell>

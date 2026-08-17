@@ -10,6 +10,8 @@ Endpoints:
 - ``POST /games/{id}/advance-half`` — advance to the next half.
 - ``POST /games/{id}/end`` — end the game by ``time_limit`` or
   ``score_limit`` rule.
+- ``POST /games/{id}/void`` — mark the game as annulled (admin only).
+- ``POST /games/{id}/forfeit`` — record a forfeit winner (admin only).
 
 Timeout encoding: ``GameEvent.player_id`` is NOT NULL and is a foreign key
 to ``players.id``, so team-level events (timeouts, half changes) use a
@@ -21,6 +23,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 import models
@@ -697,6 +700,100 @@ def end_game(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Could not end game: {str(exc)}",
+        ) from exc
+    return game
+
+
+# ---------------------------------------------------------------------------
+# Void / forfeit
+# ---------------------------------------------------------------------------
+class ForfeitRequest(BaseModel):
+    """Body for ``POST /games/{id}/forfeit`` — the team declared winner."""
+
+    winner_team_id: int = Field(..., ge=1)
+
+
+@router.post("/{game_id}/void", response_model=schemas.Game)
+def void_game(
+    game_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Mark a game as annulled.
+
+    Voids are reversible in practice by re-setting ``is_voided=False``
+    via the regular ``PUT /games/{id}`` endpoint. The score is left
+    untouched so the audit trail is preserved; standings computations
+    treat ``is_voided=True`` as a "skip this game" signal.
+
+    :param game_id: Game primary key.
+    :param db: SQLAlchemy session.
+    :return: The updated game.
+    """
+    game = _get_game_or_404(db, game_id)
+    try:
+        game.is_voided = True
+        game.is_live = False
+        game.clock_running = False
+        game.clock_started_at = None
+        db.commit()
+        db.refresh(game)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not void game: {str(exc)}",
+        ) from exc
+    return game
+
+
+@router.post("/{game_id}/forfeit", response_model=schemas.Game)
+def forfeit_game(
+    game_id: int,
+    body: ForfeitRequest,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Record a forfeit winner for a game.
+
+    The ``winner_team_id`` MUST be one of the two teams participating.
+    Scores are not overwritten — the standings engine reads this column
+    to credit the winner with the win. If the game is already voided
+    we 409 to avoid producing contradictory state.
+
+    :param game_id: Game primary key.
+    :param body: Forfeit payload declaring the winning team.
+    :param db: SQLAlchemy session.
+    :return: The updated game.
+    """
+    game = _get_game_or_404(db, game_id)
+    if game.is_voided:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Game is voided — clear the void before recording a forfeit.",
+        )
+    if body.winner_team_id not in (game.home_team_id, game.away_team_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"winner_team_id must be the home ({game.home_team_id}) or "
+                f"away ({game.away_team_id}) team of this game."
+            ),
+        )
+    try:
+        game.forfeit_winner_team_id = body.winner_team_id
+        game.is_completed = True
+        game.is_live = False
+        game.clock_running = False
+        game.clock_started_at = None
+        game.end_time = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(game)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not record forfeit: {str(exc)}",
         ) from exc
     return game
 

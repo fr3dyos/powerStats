@@ -79,6 +79,7 @@ export default async function AdminUsersPage() {
               roleAdmin: au.roleAdmin,
               roleScorekeeper: au.roleScorekeeper,
               rolePublic: au.rolePublic,
+              searchPlaceholder: au.searchPlaceholder,
             }}
           />
         )}

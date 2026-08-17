@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { teamColor, type Game, type Team, type Tournament } from "@/utils/api-shared";
+import { matchesQuery } from "@/app/_components/ListSearch";
 
 type Row = {
   tournament: Tournament;
@@ -28,6 +29,7 @@ type Labels = {
   noTeams: string;
   noTeamsHint: string;
   pickTournamentFirst: string;
+  searchPlaceholder: string;
 };
 
 type GamesAdminTableProps = {
@@ -52,6 +54,7 @@ function formatTime(value: string | null | undefined): string {
 
 export default function GamesAdminTable({ rows, labels }: GamesAdminTableProps) {
   const [tournamentFilter, setTournamentFilter] = useState<number | "all">("all");
+  const [query, setQuery] = useState("");
   // When the table-level filter is "all", the "+ New game" CTA needs a
   // specific tournament to deep-link into. The user picks one inline; the
   // CTA stays disabled until they do so we never bounce them to a generic
@@ -65,9 +68,29 @@ export default function GamesAdminTable({ rows, labels }: GamesAdminTableProps) 
   }, [rows]);
 
   const filteredRows = useMemo(() => {
-    if (tournamentFilter === "all") return rows;
-    return rows.filter((r) => r.tournament.id === tournamentFilter);
-  }, [rows, tournamentFilter]);
+    const byTournament =
+      tournamentFilter === "all"
+        ? rows
+        : rows.filter((r) => r.tournament.id === tournamentFilter);
+    if (!query.trim()) return byTournament;
+    return byTournament
+      .map((r) => {
+        const teamNames = r.teams.map((t) => t.name).join(" ");
+        const games = r.games.filter((g) => {
+          const home = r.teams.find((t) => t.id === g.home_team_id)?.name ?? "";
+          const away = r.teams.find((t) => t.id === g.away_team_id)?.name ?? "";
+          return matchesQuery(query, [
+            r.tournament.name,
+            teamNames,
+            home,
+            away,
+            g.field_number != null ? String(g.field_number) : "",
+          ]);
+        });
+        return { ...r, games };
+      })
+      .filter((r) => r.games.length > 0);
+  }, [rows, tournamentFilter, query]);
 
   const totalGames = filteredRows.reduce((acc, r) => acc + r.games.length, 0);
 
@@ -86,6 +109,15 @@ export default function GamesAdminTable({ rows, labels }: GamesAdminTableProps) 
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <input
+            type="search"
+            className="ps-input"
+            placeholder={labels.searchPlaceholder}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label={labels.searchPlaceholder}
+            style={{ maxWidth: 240 }}
+          />
           <label
             htmlFor="ps-games-tournament-filter"
             style={{ fontSize: 13, color: "var(--ps-text-muted)" }}

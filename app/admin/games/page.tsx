@@ -77,6 +77,7 @@ export default async function AdminGamesPage() {
     noTeams: ag.noTeams,
     noTeamsHint: ag.noTeamsHint,
     pickTournamentFirst: ag.pickTournamentFirst,
+    searchPlaceholder: ag.searchPlaceholder,
   };
 
   return (

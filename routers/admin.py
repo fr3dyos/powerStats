@@ -1048,7 +1048,7 @@ def bulk_import_teams_and_players(
 
     Expects rows with columns:
     - player name (first name)
-    - player lastname (last name)
+    - player lastname OR "player last name" (last name; both spellings accepted)
     - player number
     - team (team name; created if doesn't exist)
     - gender (optional)
@@ -1079,7 +1079,11 @@ def bulk_import_teams_and_players(
             row_lower = {k.strip().lower(): v for k, v in row.items()}
 
             player_name = row_lower.get("player name", "").strip()
-            player_lastname = row_lower.get("player lastname", "").strip()
+            # Accept both "player lastname" and "player last name" as headers.
+            player_lastname = (
+                row_lower.get("player lastname", "").strip()
+                or row_lower.get("player last name", "").strip()
+            )
             player_number = row_lower.get("player number", "").strip()
             team_name = row_lower.get("team", "").strip()
             gender = row_lower.get("gender", "").strip() or None

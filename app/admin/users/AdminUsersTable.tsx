@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { usersApi, type AuthUser } from "@/utils/api";
+import { ListSearch, matchesQuery } from "@/app/_components/ListSearch";
 
 type Labels = {
   email: string;
@@ -17,6 +18,7 @@ type Labels = {
   roleAdmin: string;
   roleScorekeeper: string;
   rolePublic: string;
+  searchPlaceholder: string;
 };
 
 type Props = {
@@ -40,6 +42,11 @@ type Row = AuthUser & {
 export default function AdminUsersTable({ users, currentUserId, labels }: Props) {
   const [rows, setRows] = useState<Row[]>(users);
   const [, startTransition] = useTransition();
+  const [query, setQuery] = useState("");
+
+  const visibleRows = rows.filter((u) =>
+    matchesQuery(query, [u.email, u.role, u.id]),
+  );
 
   const updateRole = (userId: string, nextRole: AuthUser["role"]) => {
     const idx = rows.findIndex((r) => r.id === userId);
@@ -84,7 +91,21 @@ export default function AdminUsersTable({ users, currentUserId, labels }: Props)
   };
 
   return (
-    <div className="ps-card" style={{ overflowX: "auto" }}>
+    <>
+      <div className="ps-card" style={{ marginBottom: 16, padding: 12 }}>
+        <ListSearch
+          query={query}
+          onQueryChange={setQuery}
+          placeholder={labels.searchPlaceholder}
+          countLabel={`${visibleRows.length} of ${rows.length}`}
+        />
+      </div>
+      {visibleRows.length === 0 ? (
+        <div className="ps-card" role="status">
+          <p style={{ margin: 0 }}>No users match "{query}".</p>
+        </div>
+      ) : (
+      <div className="ps-card" style={{ overflowX: "auto" }}>
       <table
         style={{
           width: "100%",
@@ -101,7 +122,7 @@ export default function AdminUsersTable({ users, currentUserId, labels }: Props)
           </tr>
         </thead>
         <tbody>
-          {rows.map((u) => {
+          {visibleRows.map((u) => {
             const isSelf = u.id === currentUserId;
             return (
               <tr key={u.id} style={{ borderTop: "1px solid var(--ps-divider)" }}>
@@ -181,6 +202,8 @@ export default function AdminUsersTable({ users, currentUserId, labels }: Props)
         </tbody>
       </table>
     </div>
+      )}
+    </>
   );
 }
 
