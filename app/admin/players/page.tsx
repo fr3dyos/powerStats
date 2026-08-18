@@ -127,7 +127,8 @@ authLinks={[
               searchPlayers: ap.searchPlayers,
               edit: ap_panel.edit,
               delete: ap_panel.delete,
-              deleteComingSoon: ap.deleteComingSoon,
+              deleteConfirm: ap.deleteConfirm,
+              deleteFailed: ap.deleteFailed,
               noPlayerMatches: ap.noPlayerMatches,
             }}
           />

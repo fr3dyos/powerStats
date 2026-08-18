@@ -53,6 +53,10 @@ def _get_tournament_or_404(db: Session, tournament_id: int) -> models.Tournament
 def list_tournaments(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
+    with_status: bool = Query(
+        False,
+        description="When true, enrich each row with a server-computed status field.",
+    ),
     db: Session = Depends(get_db),
     _: str = Depends(require_public),
 ):
@@ -60,6 +64,10 @@ def list_tournaments(
 
     :param skip: Number of rows to skip.
     :param limit: Maximum number of rows to return.
+    :param with_status: When true, enriches each row with a computed
+        ``status`` (``"live" | "upcoming" | "completed"``) and
+        ``has_live_game`` boolean. Avoids the frontend's previous N+1
+        pattern of listing games per tournament.
     :param db: SQLAlchemy session.
     :return: List of tournaments ordered by start date (newest first).
     """
@@ -76,7 +84,61 @@ def list_tournaments(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Could not list tournaments: {str(exc)}",
         ) from exc
-    return tournaments
+
+    if not with_status:
+        return tournaments
+
+    # Build a {tournament_id: has_live_game} map in a single query.
+    try:
+        live_rows = (
+            db.query(models.Game.tournament_id)
+            .filter(
+                models.Game.tournament_id.in_([t.id for t in tournaments]),
+                models.Game.is_live.is_(True),
+            )
+            .distinct()
+            .all()
+        )
+        live_set = {row[0] for row in live_rows}
+    except Exception:
+        live_set = set()
+
+    now_ms = int(datetime.utcnow().timestamp() * 1000)
+    out: List[schemas.TournamentWithStatus] = []
+    for t in tournaments:
+        # Compute status using the live flag as primary signal (truth) and
+        # date windows as fallback when no live game is recorded.
+        try:
+            start_ms = int(t.start_date.timestamp() * 1000)
+            end_ms = int(t.end_date.timestamp() * 1000)
+        except Exception:
+            start_ms = end_ms = now_ms
+
+        if t.id in live_set:
+            status = "live"
+        elif end_ms < now_ms:
+            status = "completed"
+        elif start_ms > now_ms:
+            status = "upcoming"
+        else:
+            # Window open but no live game recorded → upcoming (safe default).
+            status = "upcoming"
+
+        out.append(
+            schemas.TournamentWithStatus(
+                id=t.id,
+                name=t.name,
+                start_date=t.start_date,
+                end_date=t.end_date,
+                location=t.location,
+                description=t.description,
+                created_at=t.created_at,
+                updated_at=t.updated_at,
+                status=status,
+                has_live_game=t.id in live_set,
+            )
+        )
+    return out
 
 
 @router.post("", response_model=schemas.Tournament, status_code=status.HTTP_201_CREATED)

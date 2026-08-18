@@ -63,6 +63,16 @@ class TournamentInDBBase(TournamentBase):
 class Tournament(TournamentInDBBase):
     pass
 
+class TournamentWithStatus(Tournament):
+    """Tournament enriched with a server-computed status string.
+
+    The frontend browser used to classify status client-side by listing all
+    games per tournament (N+1). Adding a flag here lets one round-trip drive
+    the Live/Upcoming/Completed tab logic.
+    """
+    status: str = "upcoming"  # "live" | "upcoming" | "completed"
+    has_live_game: bool = False
+
 class TournamentWithTeams(TournamentInDBBase):
     teams: List["Team"] = []
 

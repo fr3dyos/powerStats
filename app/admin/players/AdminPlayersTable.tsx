@@ -15,7 +15,8 @@ type Labels = {
   searchPlayers: string;
   edit: string;
   delete: string;
-  deleteComingSoon: string;
+  deleteConfirm: string;
+  deleteFailed: string;
   noPlayerMatches: string;
 };
 
@@ -26,6 +27,7 @@ type AdminPlayersTableProps = {
 
 export default function AdminPlayersTable({ rows, labels }: AdminPlayersTableProps) {
   const [query, setQuery] = useState("");
+  const [busyId, setBusyId] = useState<number | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -37,12 +39,29 @@ export default function AdminPlayersTable({ rows, labels }: AdminPlayersTablePro
     });
   }, [rows, query]);
 
-  const handleDelete = (player: PlayerRow) => {
-    // Backend not implemented yet — surface the placeholder so the user
-    // sees the action exists rather than a silent click.
+  const handleDelete = async (player: PlayerRow) => {
     if (typeof window === "undefined") return;
     const playerName = formatPlayerName(player);
-    window.alert(`${labels.deleteComingSoon}\n\n${playerName}`);
+    const confirmMessage = labels.deleteConfirm.replace("{name}", playerName);
+    if (!window.confirm(confirmMessage)) return;
+    setBusyId(player.id);
+    try {
+      const res = await fetch(`/api/admin/players/${player.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok && res.status !== 204) {
+        const detail = await res
+          .json()
+          .catch(() => ({ detail: res.statusText }));
+        throw new Error(detail.detail ?? `Failed (${res.status})`);
+      }
+      // Refresh the page so the table reflects the deletion.
+      window.location.reload();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      window.alert(`${labels.deleteFailed}: ${message}`);
+      setBusyId(null);
+    }
   };
 
   return (
@@ -192,6 +211,7 @@ export default function AdminPlayersTable({ rows, labels }: AdminPlayersTablePro
                           type="button"
                           className="ps-btn ps-btn--ghost"
                           onClick={() => handleDelete(p)}
+                          disabled={busyId === p.id}
                           aria-label={`${labels.delete}: ${formatPlayerName(p)}`}
                           title={labels.delete}
                           style={{
@@ -199,7 +219,7 @@ export default function AdminPlayersTable({ rows, labels }: AdminPlayersTablePro
                             padding: "4px 10px",
                           }}
                         >
-                          {labels.delete}
+                          {busyId === p.id ? "…" : labels.delete}
                         </button>
                       </div>
                     </td>
